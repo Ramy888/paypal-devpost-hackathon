@@ -3,11 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test test/",
     "spike1:send": "node --env-file=.env postman/run.mjs \"1a · create and send\"",
     "spike1:paid": "node --env-file=.env postman/run.mjs \"1b · confirm paid\"",
     "spike1:webhooks": "node --env-file=.env postman/run.mjs \"1c · webhooks\""
   },
   "devDependencies": {
     "newman": "^6.2.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
