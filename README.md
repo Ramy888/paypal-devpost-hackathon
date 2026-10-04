@@ -15,3 +15,7 @@ npm run spike1:webhooks                       # needs WEBHOOK_URL
 ```
 
 The collection is in `postman/` and can also be imported into the Postman app.
+
+## Webhook server
+
+`server/` is a small Node service that receives PayPal webhooks, checks each signature with PayPal, and keeps the last 50 verified events at `GET /events` (admin token required). Run `npm test` for its tests and `npm start` to run it locally. It is deployed on Render.
