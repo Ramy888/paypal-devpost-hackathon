@@ -1,0 +1,438 @@
+{
+  "info": {
+    "name": "CollectPilot \u00b7 Spike 1 (PayPal sandbox money path)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Invoice create \u2192 send \u2192 buyer pays \u2192 PAID. Run with npm scripts in package.json; secrets come from .env, never from this file."
+  },
+  "item": [
+    {
+      "name": "1a \u00b7 create and send",
+      "item": [
+        {
+          "name": "Get access token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "url": "{{api_base}}/v1/oauth2/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', j.access_token);",
+                  "pm.test('scope includes invoicing', () => pm.expect(j.scope).to.include('invoicing'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create draft invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v2/invoicing/invoices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"detail\": {\n    \"currency_code\": \"USD\",\n    \"invoice_number\": \"{{invoice_number}}\",\n    \"note\": \"Logo project for Acme (CollectPilot spike 1)\",\n    \"payment_term\": {\n      \"term_type\": \"NET_14\"\n    }\n  },\n  \"primary_recipients\": [\n    {\n      \"billing_info\": {\n        \"email_address\": \"{{buyer_email}}\",\n        \"name\": {\n          \"given_name\": \"Acme\",\n          \"surname\": \"Studio\"\n        }\n      }\n    }\n  ],\n  \"items\": [\n    {\n      \"name\": \"Logo project\",\n      \"quantity\": \"1\",\n      \"unit_amount\": {\n        \"currency_code\": \"USD\",\n        \"value\": \"1200.00\"\n      }\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invoice created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const j = pm.response.json();",
+                  "const id = j.id || (j.href || '').split('/').pop();",
+                  "pm.test('has invoice id', () => pm.expect(id).to.match(/^INV2-/));",
+                  "pm.collectionVariables.set('invoice_id', id);"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('invoice_number', 'CP-' + Date.now());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v2/invoicing/invoices/{{invoice_id}}/send",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"send_to_invoicer\": true,\n  \"send_to_recipient\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('invoice sent', () => pm.expect(pm.response.code).to.be.oneOf([200, 202]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get invoice (expect SENT)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v2/invoicing/invoices/{{invoice_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "pm.test('status is SENT or later', () => pm.expect(['SENT','UNPAID','PAID','PARTIALLY_PAID']).to.include(j.status));",
+                  "const url = j.detail && j.detail.metadata && j.detail.metadata.recipient_view_url;",
+                  "if (url) { pm.collectionVariables.set('payer_url', url); console.log('PAYER URL (open as sandbox buyer): ' + url); }",
+                  "console.log('INVOICE ID: ' + j.id + '  STATUS: ' + j.status);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send reminder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v2/invoicing/invoices/{{invoice_id}}/remind",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Friendly reminder: Logo project invoice\",\n  \"note\": \"Just a nudge, thanks!\",\n  \"send_to_invoicer\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('reminder accepted', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 204]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1b \u00b7 confirm paid",
+      "description": "Run after paying as the sandbox buyer. Pass the invoice id with --env-var invoice_id=INV2-...",
+      "item": [
+        {
+          "name": "Get access token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "url": "{{api_base}}/v1/oauth2/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', j.access_token);",
+                  "pm.test('scope includes invoicing', () => pm.expect(j.scope).to.include('invoicing'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get invoice (expect PAID)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v2/invoicing/invoices/{{invoice_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const j = pm.response.json();",
+                  "console.log('STATUS: ' + j.status);",
+                  "pm.test('invoice is PAID', () => pm.expect(j.status).to.eql('PAID'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1c \u00b7 webhooks",
+      "item": [
+        {
+          "name": "Get access token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "url": "{{api_base}}/v1/oauth2/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', j.access_token);",
+                  "pm.test('scope includes invoicing', () => pm.expect(j.scope).to.include('invoicing'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List webhooks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v1/notifications/webhooks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('ok', () => pm.response.to.have.status(200)); console.log(JSON.stringify(pm.response.json().webhooks.map(w => ({id: w.id, url: w.url})), null, 1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create webhook (INVOICING.*)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{api_base}}/v1/notifications/webhooks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{webhook_url}}\",\n  \"event_types\": [\n    {\n      \"name\": \"INVOICING.INVOICE.PAID\"\n    },\n    {\n      \"name\": \"INVOICING.INVOICE.CREATED\"\n    },\n    {\n      \"name\": \"INVOICING.INVOICE.CANCELLED\"\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('webhook created', () => pm.response.to.have.status(201)); console.log('WEBHOOK ID (put in .env PAYPAL_WEBHOOK_ID): ' + pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "invoice_id",
+      "value": ""
+    },
+    {
+      "key": "invoice_number",
+      "value": ""
+    },
+    {
+      "key": "payer_url",
+      "value": ""
+    }
+  ]
+}
