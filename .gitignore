@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+node_modules/
+postman/*.local.json
+.DS_Store
+
+# Private planning notes (kept local)
+paypal-ai-hackathon.md
+debate/
+.vscode/
