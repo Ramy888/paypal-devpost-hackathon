@@ -3,6 +3,7 @@ import DashboardLoader from "@/components/DashboardLoader";
 import type { InvoiceRow } from "@/components/ReceivablesDashboard";
 import { toRow } from "@/lib/invoices.mjs";
 import { paypal } from "@/lib/server/paypal";
+import { now } from "@/lib/server/clock.mjs";
 
 // Clearly fake rows for load testing: /?synthetic=1000
 function syntheticRows(count: number): InvoiceRow[] {
@@ -23,7 +24,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   await connection();
   const { synthetic } = await searchParams;
   const list = await paypal().request("GET", "/v2/invoicing/invoices?page_size=100&total_required=true");
-  const real: InvoiceRow[] = (list.items ?? []).map((inv: unknown) => toRow(inv));
+  const today = await now();
+  const real: InvoiceRow[] = (list.items ?? []).map((inv: unknown) => toRow(inv, today));
   const extra = Math.min(Number(synthetic) || 0, 5000);
-  return <DashboardLoader rows={[...real, ...syntheticRows(extra)]} />;
+  return <DashboardLoader rows={[...real, ...syntheticRows(extra)]} nowIso={today.toISOString()} />;
 }

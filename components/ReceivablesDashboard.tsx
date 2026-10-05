@@ -48,7 +48,8 @@ const INITIAL_STATE: AgReportState = {
   ],
 };
 
-export default function ReceivablesDashboard({ initialRows }: { initialRows: InvoiceRow[] }) {
+// nowIso is the server's demo-clock "today", so days overdue match what the agent sees.
+export default function ReceivablesDashboard({ initialRows, nowIso }: { initialRows: InvoiceRow[]; nowIso: string }) {
   const [rows, setRows] = useState(initialRows);
   const [connected, setConnected] = useState(false);
   const [version, setVersion] = useState(0);
@@ -62,13 +63,13 @@ export default function ReceivablesDashboard({ initialRows }: { initialRows: Inv
     source.onerror = () => setConnected(false);
     source.onmessage = (msg) => {
       const ev: LiveEvent = JSON.parse(msg.data);
-      setRows((prev) => applyEvent(prev, ev));
+      setRows((prev) => applyEvent(prev, ev, new Date(nowIso)));
       setStudioState(stateRef.current);
       setVersion((v) => v + 1);
       setLastUpdate({ invoice: ev.invoice_id, status: ev.status, lagMs: Date.now() - Date.parse(ev.received_at) });
     };
     return () => source.close();
-  }, []);
+  }, [nowIso]);
 
   // AG Studio 3.0.0 does not redraw its grid when `data` changes (tested: new `data` prop,
   // api.setProperty("data"), and an async source with api.reload()). Until that is fixed we

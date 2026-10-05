@@ -9,6 +9,6 @@ const ReceivablesDashboard = dynamic(() => import("./ReceivablesDashboard"), {
   loading: () => <p className="p-8 text-sm text-zinc-500">Loading receivables…</p>,
 });
 
-export default function DashboardLoader({ rows }: { rows: InvoiceRow[] }) {
-  return <ReceivablesDashboard initialRows={rows} />;
+export default function DashboardLoader({ rows, nowIso }: { rows: InvoiceRow[]; nowIso: string }) {
+  return <ReceivablesDashboard initialRows={rows} nowIso={nowIso} />;
 }

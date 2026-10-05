@@ -28,3 +28,34 @@ ALTER TABLE payers ADD COLUMN IF NOT EXISTS first_used_at timestamptz;
 ALTER TABLE payers ADD COLUMN IF NOT EXISTS payments_count integer NOT NULL DEFAULT 0;
 ALTER TABLE payers ADD COLUMN IF NOT EXISTS paid_total numeric(12, 2) NOT NULL DEFAULT 0;
 ALTER TABLE payers ADD COLUMN IF NOT EXISTS last_payment_at timestamptz;
+
+-- Small key/value settings (e.g. the demo clock offset).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key    text PRIMARY KEY,
+  value  text NOT NULL
+);
+
+-- Reminder agent: one row per invoice and stage; the unique key stops double drafting.
+CREATE TABLE IF NOT EXISTS reminders (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id     text NOT NULL,
+  invoice_number text NOT NULL,
+  client_email   text NOT NULL,
+  stage          smallint NOT NULL,
+  days_overdue   integer NOT NULL,
+  amount         numeric(12, 2) NOT NULL,
+  currency       text NOT NULL,
+  risk_bucket    text NOT NULL,
+  risk_reason    text NOT NULL,
+  language       text NOT NULL,
+  subject        text NOT NULL,
+  body           text NOT NULL,
+  edited         boolean NOT NULL DEFAULT false,
+  status         text NOT NULL DEFAULT 'drafted' CHECK (status IN ('drafted', 'sent', 'cancelled')),
+  cancel_reason  text,
+  drafted_at     timestamptz NOT NULL,
+  auto_send_at   timestamptz NOT NULL,
+  sent_at        timestamptz,
+  sent_by        text,
+  UNIQUE (invoice_id, stage)
+);

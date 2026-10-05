@@ -4,6 +4,7 @@ import { z } from "zod";
 import { whatDoIOwe, payInvoice, AgentPayError } from "@/lib/agentPay.mjs";
 import { eventStore } from "@/lib/events.mjs";
 import { paypal } from "@/lib/server/paypal";
+import { now } from "@/lib/server/clock.mjs";
 import { payerForKey } from "@/lib/connect.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 
@@ -34,7 +35,7 @@ function buildServer(payer: Payer) {
       description: "Lists the PayPal invoices your owner still owes through CollectPilot, most overdue first.",
       annotations: { readOnlyHint: true },
     },
-    async () => text(await whatDoIOwe({ paypal: paypal(), payerEmail: payer.email })),
+    async () => text(await whatDoIOwe({ paypal: paypal(), payerEmail: payer.email, now: await now() })),
   );
 
   server.registerTool(
