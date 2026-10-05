@@ -72,7 +72,8 @@ export default function ReceivablesDashboard({ initialRows }: { initialRows: Inv
 
   // AG Studio 3.0.0 does not redraw its grid when `data` changes (tested: new `data` prop,
   // api.setProperty("data"), and an async source with api.reload()). Until that is fixed we
-  // remount Studio on each change, carrying the user's dashboard state across.
+  // remount Studio on each change, carrying the user's dashboard state across. The remount
+  // visibly blanks the grid ("Loading…") for a moment; see the plan's spike 2 notes.
   const data = useMemo(() => ({ sources: [{ id: "invoices", name: "Invoices", data: rows, fields: SOURCE_FIELDS }] }), [rows]);
 
   return (
