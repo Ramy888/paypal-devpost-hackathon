@@ -94,3 +94,23 @@ test("verifyWebhookSignature returns false on FAILURE", async () => {
   const ok = await pp.verifyWebhookSignature({ headers: {}, rawBody: "{}", webhookId: "WHID" });
   assert.equal(ok, false);
 });
+
+test("a 403 other than NOT_AUTHORIZED keeps the token and does not retry", async () => {
+  const fetch = fakeFetch((c) => {
+    if (c.url.endsWith("/v1/oauth2/token")) return { json: { access_token: "tok", expires_in: 32400 } };
+    return { status: 403, json: { name: "PERMISSION_DENIED" } };
+  });
+  const pp = createPayPalClient(opts(fetch));
+  await assert.rejects(pp.request("GET", "/v1/something"), /403 PERMISSION_DENIED/);
+  assert.equal(fetch.calls.filter((c) => c.url.endsWith("/terminate")).length, 0);
+  assert.equal(fetch.calls.filter((c) => c.url.endsWith("/v1/something")).length, 1);
+});
+
+test("passes extra headers such as PayPal-Request-Id", async () => {
+  const fetch = fakeFetch((c) =>
+    c.url.endsWith("/v1/oauth2/token") ? { json: { access_token: "tok", expires_in: 32400 } } : { json: {} },
+  );
+  const pp = createPayPalClient(opts(fetch));
+  await pp.request("POST", "/v2/checkout/orders", {}, { headers: { "PayPal-Request-Id": "req-1" } });
+  assert.equal(fetch.calls.at(-1).headers["PayPal-Request-Id"], "req-1");
+});
