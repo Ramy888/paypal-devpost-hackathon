@@ -10,7 +10,10 @@ import { COOKIE } from "@/lib/server/connectCookies";
 
 // Hides the agent key for good once the client has saved it.
 export async function confirmKeySaved() {
-  (await cookies()).delete({ name: COOKIE.reveal, path: "/connect" });
+  const jar = await cookies();
+  const payerId = unsign(jar.get(COOKIE.payer)?.value);
+  if (payerId) await pgStore().markKeySaved(payerId);
+  jar.delete({ name: COOKIE.reveal, path: "/connect" });
   redirect("/connect/done");
 }
 

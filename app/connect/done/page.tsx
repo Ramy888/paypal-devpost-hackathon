@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CopyField } from "@/components/connect/CopyField";
-import { Steps } from "@/components/connect/Steps";
+import { Steps, type StepState } from "@/components/connect/Steps";
 import { pgStore } from "@/lib/server/db.mjs";
 import { unsign } from "@/lib/server/session";
 import { COOKIE } from "@/lib/server/connectCookies";
@@ -11,6 +11,13 @@ import { confirmKeySaved, revoke } from "../actions";
 export const metadata: Metadata = { title: "Agent connected · CollectPilot" };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+const day = (d: Date | string) => new Date(d).toLocaleDateString("en-US", { dateStyle: "medium" });
+
+// Marks the first unfinished step as the one to do next.
+function withStates(done: boolean[]): StepState[] {
+  const next = done.indexOf(false);
+  return done.map((d, i) => (d ? "done" : i === next ? "active" : "todo"));
+}
 
 export default async function DonePage() {
   const jar = await cookies();
@@ -19,6 +26,9 @@ export default async function DonePage() {
   if (!payer || payer.status !== "active") redirect("/connect");
 
   const agentKey = jar.get(COOKIE.reveal)?.value;
+  // An assistant that has used the key proves it was saved, even if the button was skipped.
+  const keySaved = Boolean(payer.keySavedAt || payer.firstUsedAt || payer.paymentsCount > 0);
+  const states = withStates([true, keySaved, Boolean(payer.firstUsedAt), payer.paymentsCount > 0]);
   const mcpUrl = `${process.env.APP_URL}/mcp`;
   const snippet = JSON.stringify(
     { mcpServers: { collectpilot: { type: "http", url: mcpUrl, headers: { Authorization: `Bearer ${agentKey ?? "<your agent key>"}` } } } },
@@ -80,16 +90,38 @@ export default async function DonePage() {
       )}
 
       <section className="grid gap-4">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">What happens next</h2>
+        <h2 className="font-display text-2xl font-semibold tracking-tight">Your setup</h2>
         <Steps
-          current={1}
           items={[
-            { title: "PayPal approval", body: "Done. CollectPilot may charge your PayPal account for invoices addressed to you." },
-            { title: "Your agent checks what you owe", body: "Whenever you or your assistant ask, it lists open invoices, most overdue first." },
-            { title: "It pays within your limit", body: `Invoices up to ${money(payer.spendLimit)} are paid in full. Larger ones are left for you.` },
-            { title: "PayPal sends you a receipt", body: "Each payment shows in your PayPal activity, and the freelancer sees the invoice marked paid." },
-          ]}
+            { title: "Approve on PayPal", body: `Done on ${day(payer.createdAt)}. CollectPilot may charge your PayPal account for invoices addressed to you.` },
+            {
+              title: "Save your agent key",
+              body: keySaved ? "Saved. We no longer show it." : "Copy the key above and keep it with your other secrets.",
+            },
+            {
+              title: "Connect your AI assistant",
+              body: payer.firstUsedAt
+                ? `Connected. Your assistant first checked in on ${day(payer.firstUsedAt)}.`
+                : "Add the setup snippet to your assistant's MCP settings. This step ticks off when it first checks in.",
+            },
+            {
+              title: "First invoice paid",
+              body:
+                payer.paymentsCount > 0
+                  ? `${payer.paymentsCount} ${payer.paymentsCount === 1 ? "invoice" : "invoices"} paid · ${money(payer.paidTotal)} · latest ${day(payer.lastPaymentAt!)}`
+                  : `Waiting for your assistant to pay an invoice. Ask it: "What do I owe through CollectPilot? Pay anything overdue."`,
+            },
+          ].map((item, i) => ({ ...item, state: states[i] }))}
         />
+      </section>
+
+      <section className="grid gap-2 rounded-xl border border-line bg-card p-6">
+        <h2 className="font-medium">How payments work</h2>
+        <ul className="grid gap-1.5 text-sm leading-relaxed text-muted">
+          <li>Your assistant pays invoices in full, up to {money(payer.spendLimit)} each. Larger invoices are left for you.</li>
+          <li>PayPal emails you a receipt for every payment, and it shows in your PayPal activity.</li>
+          <li>The freelancer sees the invoice marked paid straight away.</li>
+        </ul>
       </section>
 
       <section className="grid gap-3 rounded-xl border border-line bg-card p-6 sm:grid-cols-[1fr_auto] sm:items-center">

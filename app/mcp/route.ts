@@ -9,13 +9,16 @@ import { pgStore } from "@/lib/server/db.mjs";
 
 export const dynamic = "force-dynamic";
 
-type Payer = { email: string; vaultId: string; spendLimit: number };
+type Payer = { id: string; email: string; vaultId: string; spendLimit: number };
 
 // Each client connects at /connect and gets an agent key; the key identifies the payer.
 async function payerFor(req: Request): Promise<Payer | null> {
   const agentKey = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-  const row = await payerForKey({ store: pgStore(), agentKey });
-  return row && { email: row.paypalEmail, vaultId: row.vaultId, spendLimit: row.spendLimit };
+  const store = pgStore();
+  const row = await payerForKey({ store, agentKey });
+  if (!row) return null;
+  if (!row.firstUsedAt) await store.markUsed(row.id);
+  return { id: row.id, email: row.paypalEmail, vaultId: row.vaultId, spendLimit: row.spendLimit };
 }
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
@@ -44,7 +47,9 @@ function buildServer(payer: Payer) {
     },
     async ({ invoice_id }) => {
       try {
-        return text(await payInvoice({ paypal: paypal(), payer, invoiceId: invoice_id, spendLimit, eventStore }));
+        const result = await payInvoice({ paypal: paypal(), payer, invoiceId: invoice_id, spendLimit, eventStore });
+        await pgStore().recordPayment(payer.id, Number(result.amount));
+        return text(result);
       } catch (err) {
         if (err instanceof AgentPayError) return { ...text({ paid: false, reason: err.code, message: err.message }), isError: true };
         throw err;

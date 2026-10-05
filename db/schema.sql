@@ -21,3 +21,10 @@ CREATE TABLE IF NOT EXISTS payers (
   created_at      timestamptz NOT NULL DEFAULT now(),
   revoked_at      timestamptz
 );
+
+-- Client setup progress, shown on /connect/done.
+ALTER TABLE payers ADD COLUMN IF NOT EXISTS key_saved_at timestamptz;
+ALTER TABLE payers ADD COLUMN IF NOT EXISTS first_used_at timestamptz;
+ALTER TABLE payers ADD COLUMN IF NOT EXISTS payments_count integer NOT NULL DEFAULT 0;
+ALTER TABLE payers ADD COLUMN IF NOT EXISTS paid_total numeric(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE payers ADD COLUMN IF NOT EXISTS last_payment_at timestamptz;
