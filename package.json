@@ -3,16 +3,34 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server/index.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
     "test": "node --test test/",
     "spike1:send": "node --env-file=.env postman/run.mjs \"1a · create and send\"",
     "spike1:paid": "node --env-file=.env postman/run.mjs \"1b · confirm paid\"",
     "spike1:webhooks": "node --env-file=.env postman/run.mjs \"1c · webhooks\""
   },
   "devDependencies": {
-    "newman": "^6.2.2"
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "newman": "^6.2.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "ag-studio": "^3.0.0",
+    "ag-studio-react": "^3.0.0",
+    "next": "16.3.8",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   }
 }

@@ -16,6 +16,22 @@ npm run spike1:webhooks                       # needs WEBHOOK_URL
 
 The collection is in `postman/` and can also be imported into the Postman app.
 
-## Webhook server
+## App
 
-`server/` is a small Node service that receives PayPal webhooks, checks each signature with PayPal, and keeps the last 50 verified events at `GET /events` (admin token required). Run `npm test` for its tests and `npm start` to run it locally. It is deployed on Render.
+A Next.js app (`app/`) with an AG Studio receivables dashboard. PayPal webhooks update it live through Server-Sent Events.
+
+| Route | Purpose |
+|---|---|
+| `/` | Receivables dashboard. `/?synthetic=1000` adds 1,000 clearly fake rows for load testing |
+| `POST /webhooks/paypal` | PayPal webhook receiver; each signature is verified with PayPal |
+| `/api/stream` | Server-Sent Events feed of verified invoice events |
+| `GET /events` | Last 50 verified events (needs `Authorization: Bearer $ADMIN_TOKEN`) |
+| `/healthz` | Health check |
+
+```sh
+npm install
+npm run dev     # http://localhost:3000
+npm test        # unit tests (node:test)
+```
+
+AG Studio shows a watermark until a licence key is configured.

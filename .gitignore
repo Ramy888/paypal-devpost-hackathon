@@ -9,3 +9,10 @@ postman/*.local.json
 paypal-ai-hackathon.md
 debate/
 .vscode/
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+.vercel
