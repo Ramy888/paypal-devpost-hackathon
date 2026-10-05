@@ -16,3 +16,6 @@ debate/
 next-env.d.ts
 *.tsbuildinfo
 .vercel
+
+# Local MCP client config holding an agent key
+.mcp-client.json
