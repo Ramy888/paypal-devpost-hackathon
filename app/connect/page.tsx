@@ -9,10 +9,21 @@ export const metadata: Metadata = { title: "Connect your AI agent · CollectPilo
 type InvoiceContext = { id: string; number: string; amount: string; currency: string; dueDate: string | null; from: string | null; paid: boolean };
 
 // Context shown when the client arrives from an invoice link (/connect?invoice=INV2-...).
-async function invoiceContext(invoiceId: string | undefined): Promise<InvoiceContext | null> {
-  if (!invoiceId || !/^INV2-[A-Z0-9-]+$/.test(invoiceId)) return null;
+// Invoices link here by number (/connect?n=RVS-...); older links use the PayPal id (?invoice=INV2-...).
+async function findInvoice(invoiceId?: string, number?: string) {
+  if (invoiceId && /^INV2-[A-Z0-9-]+$/.test(invoiceId)) return paypal().request("GET", `/v2/invoicing/invoices/${invoiceId}`);
+  if (number && /^[A-Z0-9-]{3,40}$/.test(number)) {
+    const res = await paypal().request("POST", "/v2/invoicing/search-invoices?page=1&page_size=1", { invoice_number: number });
+    const id = res.items?.[0]?.id;
+    return id ? paypal().request("GET", `/v2/invoicing/invoices/${id}`) : null;
+  }
+  return null;
+}
+
+async function invoiceContext(invoiceId: string | undefined, number?: string): Promise<InvoiceContext | null> {
   try {
-    const inv = await paypal().request("GET", `/v2/invoicing/invoices/${invoiceId}`);
+    const inv = await findInvoice(invoiceId, number);
+    if (!inv) return null;
     const paid = ["PAID", "MARKED_AS_PAID"].includes(inv.status);
     const shown = paid ? inv.amount : (inv.due_amount ?? inv.amount);
     return {
@@ -44,8 +55,8 @@ const CANNOT = [
 
 export default async function ConnectPage({ searchParams }: PageProps<"/connect">) {
   await connection();
-  const { invoice } = await searchParams;
-  const ctx = await invoiceContext(typeof invoice === "string" ? invoice : undefined);
+  const { invoice, n } = await searchParams;
+  const ctx = await invoiceContext(typeof invoice === "string" ? invoice : undefined, typeof n === "string" ? n : undefined);
 
   return (
     <div className="grid gap-8">
