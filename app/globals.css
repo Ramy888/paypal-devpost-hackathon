@@ -1,26 +1,42 @@
 @import "tailwindcss";
 
+/* CollectPilot: a receivables ledger. Warm-grey paper, deep ink, and one
+   "cleared" green reserved for money that has moved. Light theme by design. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f4f3ef;
+  --card: #ffffff;
+  --ink: #12202b;
+  --muted: #5d6a72;
+  --line: #e1e0d9;
+  --cleared: #0d6b57;
+  --cleared-soft: #e2f0ea;
+  --pending: #a3570b;
+  --pending-soft: #f8ecdc;
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-cleared: var(--cleared);
+  --color-cleared-soft: var(--cleared-soft);
+  --color-pending: var(--pending);
+  --color-pending-soft: var(--pending-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-display: var(--font-bricolage);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cleared);
+  outline-offset: 2px;
 }

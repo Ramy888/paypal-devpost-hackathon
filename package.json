@@ -5,16 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node --env-file-if-exists=.env scripts/migrate.mjs && next start",
     "lint": "eslint",
     "test": "node --test test/",
     "spike1:send": "node --env-file=.env postman/run.mjs \"1a · create and send\"",
     "spike1:paid": "node --env-file=.env postman/run.mjs \"1b · confirm paid\"",
-    "spike1:webhooks": "node --env-file=.env postman/run.mjs \"1c · webhooks\""
+    "spike1:webhooks": "node --env-file=.env postman/run.mjs \"1c · webhooks\"",
+    "migrate": "node --env-file=.env scripts/migrate.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
@@ -31,6 +33,7 @@
     "ag-studio": "^3.0.0",
     "ag-studio-react": "^3.0.0",
     "next": "16.3.8",
+    "pg": "^8.23.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.6.5"

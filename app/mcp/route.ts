@@ -4,24 +4,25 @@ import { z } from "zod";
 import { whatDoIOwe, payInvoice, AgentPayError } from "@/lib/agentPay.mjs";
 import { eventStore } from "@/lib/events.mjs";
 import { paypal } from "@/lib/server/paypal";
-import { bearerMatches } from "@/lib/server/auth";
+import { payerForKey } from "@/lib/connect.mjs";
+import { pgStore } from "@/lib/server/db.mjs";
 
 export const dynamic = "force-dynamic";
 
-// Spike: one payer. Their agent authenticates with AGENT_API_KEY and pays with the
-// PayPal token they approved once. Later, each payer gets their own key and token.
-function payerFor(req: Request) {
-  if (!bearerMatches(req, process.env.AGENT_API_KEY)) return null;
-  const email = process.env.PAYPAL_SANDBOX_BUYER_EMAIL;
-  const vaultId = process.env.PAYPAL_SANDBOX_BUYER_VAULT_ID;
-  return email && vaultId ? { email, vaultId } : null;
+type Payer = { email: string; vaultId: string; spendLimit: number };
+
+// Each client connects at /connect and gets an agent key; the key identifies the payer.
+async function payerFor(req: Request): Promise<Payer | null> {
+  const agentKey = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+  const row = await payerForKey({ store: pgStore(), agentKey });
+  return row && { email: row.paypalEmail, vaultId: row.vaultId, spendLimit: row.spendLimit };
 }
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 
-function buildServer(payer: { email: string; vaultId: string }) {
+function buildServer(payer: Payer) {
   const server = new McpServer({ name: "collectpilot", version: "0.1.0" });
-  const spendLimit = Number(process.env.AGENT_SPEND_LIMIT ?? 1000);
+  const { spendLimit } = payer;
 
   server.registerTool(
     "what_do_i_owe",
@@ -54,7 +55,7 @@ function buildServer(payer: { email: string; vaultId: string }) {
 }
 
 async function handle(req: Request) {
-  const payer = payerFor(req);
+  const payer = await payerFor(req);
   if (!payer) return Response.json({ error: "unauthorized" }, { status: 401 });
   const server = buildServer(payer);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
