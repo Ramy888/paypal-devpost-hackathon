@@ -214,7 +214,7 @@ export function Composer({ freelancerName }: { freelancerName: string }) {
       )}
 
       {draft && (
-        <section className="grid gap-5 rounded-xl border-2 border-ink bg-card p-6" aria-label="Review the draft">
+        <section className="grid gap-5 rounded-xl border-2 border-ink bg-card p-4 sm:p-6" aria-label="Review the draft">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-display text-2xl font-semibold tracking-tight">Check before sending</h2>
             <p className="font-display text-2xl font-semibold tabular-nums">{money(total, draft.currency)}</p>
@@ -241,8 +241,8 @@ export function Composer({ freelancerName }: { freelancerName: string }) {
           <div className="grid gap-2">
             <span className="text-sm text-muted">Line items</span>
             {draft.items.map((it, i) => (
-              <div key={i} className="grid grid-cols-[1fr_4.5rem_7rem] gap-2">
-                <input dir="auto" aria-label="Item" className={field} value={it.name} onChange={(e) => updateItem(i, { name: e.target.value })} />
+              <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_4.5rem_7rem]">
+                <input dir="auto" aria-label="Item" className={`${field} col-span-2 sm:col-span-1`} value={it.name} onChange={(e) => updateItem(i, { name: e.target.value })} />
                 <input aria-label="Quantity" type="number" min={1} className={`${field} tabular-nums`} value={it.quantity} onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })} />
                 <input aria-label="Price" type="number" min={0} step="0.01" className={`${field} tabular-nums`} value={it.unit_amount} onChange={(e) => updateItem(i, { unit_amount: Number(e.target.value) })} />
               </div>

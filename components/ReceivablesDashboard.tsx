@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgStudio } from "ag-studio-react";
 import type { AgReportState } from "ag-studio";
 import { applyEvent } from "@/lib/invoices.mjs";
@@ -48,6 +49,35 @@ const INITIAL_STATE: AgReportState = {
   ],
 };
 
+// AG Studio's layout canvas needs ~720px, so phones get a plain list of the same rows.
+const NARROW = "(max-width: 639px)";
+const subscribeNarrow = (cb: () => void) => {
+  const mq = window.matchMedia(NARROW);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+const money = (n: number, c: string) => new Intl.NumberFormat("en-US", { style: "currency", currency: c }).format(n);
+
+function PhoneList({ rows }: { rows: InvoiceRow[] }) {
+  if (rows.length === 0) return <p className="p-4 text-sm text-zinc-500">No invoices yet.</p>;
+  return (
+    <ul className="divide-y divide-zinc-200">
+      {rows.map((r) => (
+        <li key={r.id} className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 px-4 py-3 text-sm">
+          <span className="truncate font-medium">{r.client}</span>
+          <span className="text-right font-semibold tabular-nums">{money(r.amount, r.currency)}</span>
+          <span className="truncate font-mono text-xs text-zinc-500">
+            {r.invoice_number} · due {r.due_date}
+          </span>
+          <span className={`text-right text-xs font-semibold ${r.paid ? "text-emerald-700" : r.days_overdue > 0 ? "text-amber-700" : "text-zinc-500"}`}>
+            {r.paid ? "Paid" : r.days_overdue > 0 ? `${r.days_overdue}d overdue` : r.status.toLowerCase()}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // nowIso is the server's demo-clock "today", so days overdue match what the agent sees.
 export default function ReceivablesDashboard({ initialRows, nowIso }: { initialRows: InvoiceRow[]; nowIso: string }) {
   const [rows, setRows] = useState(initialRows);
@@ -55,6 +85,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
   const [version, setVersion] = useState(0);
   const [studioState, setStudioState] = useState<AgReportState>(INITIAL_STATE);
   const stateRef = useRef<AgReportState>(INITIAL_STATE);
+  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
   const [lastUpdate, setLastUpdate] = useState<{ invoice: string; status: string; lagMs: number } | null>(null);
 
   useEffect(() => {
@@ -78,26 +109,34 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
   const data = useMemo(() => ({ sources: [{ id: "invoices", name: "Invoices", data: rows, fields: SOURCE_FIELDS }] }), [rows]);
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 text-sm">
+    <div className="flex h-dvh flex-col">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-200 px-4 py-3 text-sm sm:px-6">
         <span className="font-semibold">CollectPilot</span>
-        <span className="flex items-center gap-4 text-zinc-500">
+        <nav className="flex gap-4 font-medium text-emerald-700">
+          <Link href="/invoices/new">New invoice</Link>
+          <Link href="/reminders">Reminders</Link>
+        </nav>
+        <span className="ms-auto flex min-w-0 items-center gap-4 text-zinc-500">
           {lastUpdate && (
-            <span data-testid="last-update">
+            <span data-testid="last-update" className="hidden truncate sm:inline">
               {lastUpdate.invoice} → {lastUpdate.status} ({lastUpdate.lagMs} ms after webhook)
             </span>
           )}
           <span className={connected ? "text-emerald-600" : "text-zinc-400"}>{connected ? "● Live" : "○ Offline"}</span>
         </span>
       </header>
-      <div className="min-h-0 flex-1">
-        <AgStudio
-          key={version}
-          data={data}
-          initialState={studioState}
-          mode="view"
-          onStateUpdated={(e) => (stateRef.current = e.state)}
-        />
+      <div className="min-h-0 flex-1 overflow-auto">
+        {narrow ? (
+          <PhoneList rows={rows} />
+        ) : (
+          <AgStudio
+            key={version}
+            data={data}
+            initialState={studioState}
+            mode="view"
+            onStateUpdated={(e) => (stateRef.current = e.state)}
+          />
+        )}
       </div>
     </div>
   );

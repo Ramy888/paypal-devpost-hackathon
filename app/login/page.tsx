@@ -6,7 +6,7 @@ import { SignInForm } from "./SignInForm";
 export const metadata: Metadata = { title: "Sign in · CollectPilot" };
 
 export default async function LoginPage() {
-  if (await isOwner()) redirect("/invoices/new");
+  if (await isOwner()) redirect("/");
   return (
     <main className="mx-auto grid min-h-full max-w-sm content-center gap-6 px-5 py-16">
       <div className="grid gap-2">

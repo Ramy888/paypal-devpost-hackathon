@@ -4,6 +4,8 @@ import type { InvoiceRow } from "@/components/ReceivablesDashboard";
 import { toRow } from "@/lib/invoices.mjs";
 import { paypal } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
+import { redirect } from "next/navigation";
+import { isOwner } from "@/lib/server/owner";
 
 // Clearly fake rows for load testing: /?synthetic=1000
 function syntheticRows(count: number): InvoiceRow[] {
@@ -22,6 +24,7 @@ function syntheticRows(count: number): InvoiceRow[] {
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await connection();
+  if (!(await isOwner())) redirect("/login");
   const { synthetic } = await searchParams;
   const list = await paypal().request("GET", "/v2/invoicing/invoices?page_size=100&total_required=true");
   const today = await now();

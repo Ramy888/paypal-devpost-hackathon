@@ -1,11 +1,13 @@
 import { eventStore } from "@/lib/events.mjs";
+import { isOwner } from "@/lib/server/owner";
 
 export const dynamic = "force-dynamic";
 
 const PING_MS = 25_000;
 
 // Server-Sent Events: pushes each verified invoice event to open dashboards.
-export function GET(req: Request) {
+export async function GET(req: Request) {
+  if (!(await isOwner())) return new Response("Sign in first.", { status: 401 });
   const enc = new TextEncoder();
   let cleanup = () => {};
 

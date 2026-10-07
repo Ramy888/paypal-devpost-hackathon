@@ -26,7 +26,7 @@ export function CopyField({ label, value, multiline = false }: { label: string; 
           {label}
         </label>
         <button type="button" onClick={copy} className="rounded-md px-2 py-1 text-xs font-medium text-cleared hover:bg-cleared-soft">
-          {state === "copied" ? "Copied" : state === "select" ? "Press ⌘C to copy" : "Copy"}
+          {state === "copied" ? "Copied" : state === "select" ? "Selected, now copy it" : "Copy"}
         </button>
       </div>
       {multiline ? (

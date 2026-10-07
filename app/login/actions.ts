@@ -15,5 +15,5 @@ export async function signIn(_prev: string | null, form: FormData): Promise<stri
     path: "/",
     maxAge: 7 * 24 * 60 * 60,
   });
-  redirect("/invoices/new");
+  redirect("/");
 }
