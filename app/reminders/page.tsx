@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { OwnerHeader } from "@/components/OwnerHeader";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { pgStore } from "@/lib/server/db.mjs";
@@ -105,18 +105,7 @@ export default async function RemindersPage() {
 
   return (
     <div className="min-h-full bg-paper">
-      <header className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-5 py-6">
-        <Link href="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-          <span aria-hidden className="grid h-7 w-7 place-items-center rounded-md bg-ink text-[12px] text-paper">
-            CP
-          </span>
-          CollectPilot
-        </Link>
-        <nav className="flex gap-4 text-sm font-medium text-cleared">
-          <Link href="/invoices/new">New invoice</Link>
-          <Link href="/">Receivables →</Link>
-        </nav>
-      </header>
+      <OwnerHeader current="/reminders" />
       <main className="mx-auto grid max-w-3xl gap-8 px-5 pb-16">
         <section className="grid gap-2 pt-2">
           <h1 className="font-display text-4xl font-semibold tracking-tight">Reminders</h1>

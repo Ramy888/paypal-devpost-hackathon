@@ -59,3 +59,23 @@ CREATE TABLE IF NOT EXISTS reminders (
   sent_by        text,
   UNIQUE (invoice_id, stage)
 );
+
+-- Retainers: a monthly PayPal subscription offered to a repeat client.
+CREATE TABLE IF NOT EXISTS retainers (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id        text NOT NULL UNIQUE,
+  client_email     text NOT NULL,
+  client_name      text NOT NULL DEFAULT '',
+  amount           numeric(12, 2) NOT NULL,
+  currency         text NOT NULL,
+  description      text NOT NULL,
+  plan_id          text NOT NULL,
+  subscription_id  text UNIQUE,
+  status           text NOT NULL DEFAULT 'offered' CHECK (status IN ('offered', 'pending', 'active', 'suspended', 'cancelled')),
+  payments_count   integer NOT NULL DEFAULT 0,
+  paid_total       numeric(12, 2) NOT NULL DEFAULT 0,
+  last_payment_at  timestamptz,
+  last_sale_id     text,
+  activated_at     timestamptz,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);

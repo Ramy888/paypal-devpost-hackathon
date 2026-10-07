@@ -1,6 +1,7 @@
 import { handleWebhook, MAX_BODY } from "@/lib/webhook.mjs";
 import { eventStore } from "@/lib/events.mjs";
 import { paypal } from "@/lib/server/paypal";
+import { applyRetainerWebhook } from "@/lib/server/retainers";
 
 export async function POST(req: Request) {
   if (Number(req.headers.get("content-length")) > MAX_BODY) {
@@ -12,7 +13,9 @@ export async function POST(req: Request) {
     webhookId: process.env.PAYPAL_WEBHOOK_ID ?? "",
     paypal: paypal(),
   });
-  if (result.summary) {
+  if (result.event && (await applyRetainerWebhook(result.event))) {
+    console.log(JSON.stringify({ msg: "retainer webhook", id: result.event.id, event_type: result.event.event_type }));
+  } else if (result.summary) {
     const isNew = eventStore.add(result.summary);
     console.log(JSON.stringify({ msg: isNew ? "webhook verified" : "webhook duplicate", ...result.summary }));
   } else if (result.status === 401) {

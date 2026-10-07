@@ -115,6 +115,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
         <nav className="flex gap-4 font-medium text-emerald-700">
           <Link href="/invoices/new">New invoice</Link>
           <Link href="/reminders">Reminders</Link>
+          <Link href="/retainers">Retainers</Link>
         </nav>
         <span className="ms-auto flex min-w-0 items-center gap-4 text-zinc-500">
           {lastUpdate && (
