@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/invoices/new", label: "New invoice" },
   { href: "/reminders", label: "Reminders" },
   { href: "/retainers", label: "Retainers" },
+  { href: "/billing", label: "Plan" },
 ];
 
 // Header for the freelancer's own pages; the current page is shown, not linked.

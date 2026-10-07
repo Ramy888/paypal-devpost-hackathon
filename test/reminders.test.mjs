@@ -160,6 +160,15 @@ test("stage 2+ reminders include the agent payment link; stage 1 does not", asyn
   assert.doesNotMatch(stage1, /connect\?n=/);
 });
 
+test("on the Free plan nothing is sent automatically, even when it is due", async () => {
+  const d = deps([inv("A", "2026-10-18")]);
+  await tick({ ...d, now: NOW });
+  const later = await tick({ ...d, now: new Date(NOW.getTime() + AUTO_SEND_AFTER_MS), autoSend: false });
+  assert.equal(later.sent, 0);
+  assert.equal(d.paypal.calls.filter((c) => c.path.endsWith("/remind")).length, 0);
+  assert.equal(d.store.rows[0].status, "drafted");
+});
+
 test("a send-only pass (background timer) never calls the AI", async () => {
   const d = deps([inv("A", "2026-10-18")]);
   const r = await tick({ ...d, now: NOW, draft: false });

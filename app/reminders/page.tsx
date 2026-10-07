@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { OwnerHeader } from "@/components/OwnerHeader";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { pgStore } from "@/lib/server/db.mjs";
 import { clockOffsetDays, now } from "@/lib/server/clock.mjs";
 import { isOwner } from "@/lib/server/owner";
+import { ownerIsPro } from "@/lib/server/pro";
 import { approveAndSend, cancelReminder, checkNow, jumpClock, resetClock, saveEdits } from "./actions";
 
 export const metadata: Metadata = { title: "Reminders · CollectPilot" };
@@ -38,7 +40,7 @@ const RISK = {
 } as const;
 const STAGE = ["", "Friendly nudge", "Follow-up", "Final notice"];
 
-function ReminderCard({ r, today }: { r: Reminder; today: Date }) {
+function ReminderCard({ r, today, pro }: { r: Reminder; today: Date; pro: boolean }) {
   const hoursLeft = Math.max(0, Math.round((new Date(r.autoSendAt).getTime() - today.getTime()) / 3_600_000));
   return (
     <article className={`grid gap-4 rounded-xl border bg-card p-5 ${r.status === "drafted" ? "border-ink" : "border-line"}`}>
@@ -64,7 +66,14 @@ function ReminderCard({ r, today }: { r: Reminder; today: Date }) {
             <textarea name="body" dir="auto" rows={5} defaultValue={r.body} className="rounded-md border border-line bg-paper px-3 py-2 leading-relaxed" />
           </label>
           <p className="rounded-md bg-pending-soft px-3 py-2 text-sm text-pending">
-            Sends automatically on {fmtDate(r.autoSendAt)} (in about {hoursLeft} hours, demo time) unless you change or cancel it.
+            {pro ? (
+              <>Sends automatically on {fmtDate(r.autoSendAt)} (in about {hoursLeft} hours, demo time) unless you change or cancel it.</>
+            ) : (
+              <>
+                Waits for you to approve it. With <Link href="/billing" className="font-semibold underline">Pro</Link>, the autopilot sends it on{" "}
+                {fmtDate(r.autoSendAt)} unless you change or cancel it.
+              </>
+            )}
             {r.edited ? " You edited this message." : ""}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -99,7 +108,12 @@ function ReminderCard({ r, today }: { r: Reminder; today: Date }) {
 export default async function RemindersPage() {
   await connection();
   if (!(await isOwner())) redirect("/login");
-  const [reminders, today, offset]: [Reminder[], Date, number] = await Promise.all([pgStore().listReminders(), now(), clockOffsetDays()]);
+  const [reminders, today, offset, pro]: [Reminder[], Date, number, boolean] = await Promise.all([
+    pgStore().listReminders(),
+    now(),
+    clockOffsetDays(),
+    ownerIsPro(),
+  ]);
   const pending = reminders.filter((r) => r.status === "drafted");
   const done = reminders.filter((r) => r.status !== "drafted");
 
@@ -143,7 +157,7 @@ export default async function RemindersPage() {
           {pending.length === 0 ? (
             <p className="text-muted">Nothing to review. Overdue invoices get a draft here automatically.</p>
           ) : (
-            pending.map((r) => <ReminderCard key={r.id} r={r} today={today} />)
+            pending.map((r) => <ReminderCard key={r.id} r={r} today={today} pro={pro} />)
           )}
         </section>
 
@@ -151,7 +165,7 @@ export default async function RemindersPage() {
           <section className="grid gap-4">
             <h2 className="font-display text-2xl font-semibold tracking-tight">History</h2>
             {done.map((r) => (
-              <ReminderCard key={r.id} r={r} today={today} />
+              <ReminderCard key={r.id} r={r} today={today} pro={pro} />
             ))}
           </section>
         )}

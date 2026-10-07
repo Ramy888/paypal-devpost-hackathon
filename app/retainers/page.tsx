@@ -7,6 +7,8 @@ import { findRetainerCandidates } from "@/lib/retainers.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 import { paypal } from "@/lib/server/paypal";
 import { isOwner } from "@/lib/server/owner";
+import { ownerIsPro } from "@/lib/server/pro";
+import Link from "next/link";
 import { createRetainerOffer, endRetainerAction } from "./actions";
 
 export const metadata: Metadata = { title: "Retainers · CollectPilot" };
@@ -58,9 +60,10 @@ export default async function RetainersPage({ searchParams }: PageProps<"/retain
   const { error, created } = await searchParams;
   const freelancer = process.env.FREELANCER_NAME ?? "Your studio";
   const store = pgStore();
-  const [retainers, list]: [Retainer[], { items?: unknown[] }] = await Promise.all([
+  const [retainers, list, pro]: [Retainer[], { items?: unknown[] }, boolean] = await Promise.all([
     store.listRetainers(),
     paypal().request("GET", "/v2/invoicing/invoices?page_size=100"),
+    ownerIsPro(),
   ]);
   const candidates: Candidate[] = findRetainerCandidates({ invoices: list.items ?? [], existing: retainers });
 
@@ -109,7 +112,16 @@ export default async function RetainersPage({ searchParams }: PageProps<"/retain
                   </label>
                 </div>
                 <p className="text-xs text-muted">Suggested from the typical invoice they paid. Nothing is charged until the client approves.</p>
-                <button className="w-fit rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-white">Create retainer offer</button>
+                {pro ? (
+                  <button className="w-fit rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-white">Create retainer offer</button>
+                ) : (
+                  <p className="text-sm">
+                    Retainers are part of Pro.{" "}
+                    <Link href="/billing" className="font-semibold text-cleared hover:underline">
+                      Upgrade for $12/month →
+                    </Link>
+                  </p>
+                )}
               </form>
             ))
           )}

@@ -5,6 +5,7 @@ import { pgStore } from "./db.mjs";
 import { now } from "./clock.mjs";
 import { paypal } from "./paypal";
 import { allow } from "./rateLimit";
+import { ownerIsPro } from "./pro";
 
 const g = globalThis as typeof globalThis & { __collectpilotTick?: Promise<unknown> };
 
@@ -24,6 +25,7 @@ export async function runTick({ draft }: { draft: boolean }) {
     freelancerName: process.env.FREELANCER_NAME ?? "Your freelancer",
     appUrl: process.env.APP_URL!,
     draft,
+    autoSend: await ownerIsPro(),
     canSpend: () => allow("reminder-draft", 50, 24 * 60 * 60_000),
   });
   g.__collectpilotTick = pass;

@@ -7,6 +7,7 @@ import { createOffer, endRetainer, validateOffer } from "@/lib/retainers.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 import { paypal } from "@/lib/server/paypal";
 import { isOwner } from "@/lib/server/owner";
+import { ownerIsPro } from "@/lib/server/pro";
 
 async function requireOwner() {
   if (!(await isOwner())) redirect("/login");
@@ -14,6 +15,7 @@ async function requireOwner() {
 
 export async function createRetainerOffer(form: FormData) {
   await requireOwner();
+  if (!(await ownerIsPro())) redirect("/billing");
   const checked = validateOffer({
     clientEmail: String(form.get("clientEmail") ?? ""),
     clientName: String(form.get("clientName") ?? ""),
