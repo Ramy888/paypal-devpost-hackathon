@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/invoices/new", label: "New invoice" },
   { href: "/reminders", label: "Reminders" },
   { href: "/retainers", label: "Retainers" },
+  { href: "/digest", label: "Digest" },
   { href: "/billing", label: "Plan" },
 ];
 
