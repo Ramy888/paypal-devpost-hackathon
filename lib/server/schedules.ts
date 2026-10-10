@@ -15,8 +15,9 @@ export async function loadByPublicId(publicId: string) {
   const schedule = await store.findScheduleByPublicId(publicId);
   if (!schedule) return null;
   const parts = await store.listParts(schedule.id);
-  const charges = parts.length ? await store.listCharges(parts.map((p: { id: string }) => p.id)) : [];
-  return { schedule, parts, charges };
+  const ids = parts.map((p: { id: string }) => p.id);
+  const [charges, messages] = ids.length ? await Promise.all([store.listCharges(ids), store.listMessages(ids)]) : [[], []];
+  return { schedule, parts, charges, messages };
 }
 
 /**

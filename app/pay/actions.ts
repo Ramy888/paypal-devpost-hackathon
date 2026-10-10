@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { approveSchedule, holdPartOp, releaseHoldOp, approveDateOp } from "@/lib/scheduleOps.mjs";
+import { approveSchedule, holdPartOp, releaseHoldOp, approveDateOp, confirmFixedOp, stillNotDoneOp, replyOp, setPartAutopayOp } from "@/lib/scheduleOps.mjs";
 import { ScheduleError } from "@/lib/schedules.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 import { paypal } from "@/lib/server/paypal";
@@ -70,17 +70,47 @@ export async function releaseHold(publicId: string, partId: string) {
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, () => releaseHoldOp({ store: pgStore(), part }), "released");
+  await run(publicId, async () => releaseHoldOp({ store: pgStore(), part, now: await now() }), "released");
 }
 
 export async function approveNewDate(publicId: string, partId: string) {
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, () => approveDateOp({ store: pgStore(), paypal: paypal(), part }), "date");
+  await run(publicId, async () => approveDateOp({ store: pgStore(), paypal: paypal(), part, now: await now() }), "date");
 }
 
 export async function turnOffAutopay(publicId: string) {
   const found = await load(publicId);
   await run(publicId, () => pgStore().setScheduleAutopay(found.schedule.id, false), "autopay-off");
+}
+
+export async function confirmFixed(publicId: string, partId: string) {
+  const found = await load(publicId);
+  const part = partOf(found, partId);
+  if (!part) redirect(`/pay/${publicId}`);
+  await run(publicId, async () => confirmFixedOp({ store: pgStore(), part, now: await now() }), "confirmed");
+}
+
+export async function stillNotDone(publicId: string, partId: string, form: FormData) {
+  const found = await load(publicId);
+  const part = partOf(found, partId);
+  if (!part) redirect(`/pay/${publicId}`);
+  await run(publicId, async () => stillNotDoneOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now() }), "still");
+}
+
+export async function clientReply(publicId: string, partId: string, form: FormData) {
+  const found = await load(publicId);
+  const part = partOf(found, partId);
+  if (!part) redirect(`/pay/${publicId}`);
+  await run(publicId, async () => replyOp({ store: pgStore(), part, author: "client", body: String(form.get("body") ?? ""), now: await now() }), "replied");
+}
+
+// One milestone's auto-pay switch. Only works once the schedule has the client's PayPal approval;
+// before that the switch posts to /pay/start instead.
+export async function setPartAutopay(publicId: string, partId: string, autopay: boolean) {
+  const found = await load(publicId);
+  const part = partOf(found, partId);
+  if (!part || !found.schedule.autopay) redirect(`/pay/${publicId}`);
+  await run(publicId, () => setPartAutopayOp({ store: pgStore(), part, autopay }), autopay ? "part-on" : "part-off");
 }

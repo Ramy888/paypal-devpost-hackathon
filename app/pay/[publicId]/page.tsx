@@ -6,7 +6,10 @@ import { StepBar } from "@/components/StepBar";
 import { scheduleSteps } from "@/components/journeys";
 import { freelancerName, loadByPublicId } from "@/lib/server/schedules";
 import { now } from "@/lib/server/clock.mjs";
-import { approveWithoutAutopay, approveNewDate, holdPart, releaseHold, turnOffAutopay } from "../actions";
+import { approveWithoutAutopay, approveNewDate, holdPart, releaseHold, turnOffAutopay, confirmFixed, stillNotDone, clientReply, setPartAutopay } from "../actions";
+import { NotDoneDialog } from "@/components/pay/NotDoneDialog";
+import { SwitchButton } from "@/components/pay/Switch";
+import { Thread, type Message } from "@/components/pay/Thread";
 
 export const metadata: Metadata = { title: "Payment schedule · CollectPilot", robots: { index: false } };
 
@@ -19,6 +22,8 @@ type Part = {
   status: "scheduled" | "sent" | "paid" | "on_hold" | "cancelled";
   holdNote: string;
   proposedDueDate: string | null;
+  autopay: boolean;
+  fixedAt: string | Date | null;
 };
 type Charge = { partId: string; outcome: "captured" | "failed" | "unconfirmed" | "over_limit"; attemptedAt: string | Date; detail: string };
 
@@ -30,6 +35,11 @@ const DONE: Record<string, string> = {
   "autopay-on": "Auto-pay is on. Each part is charged on its date unless you mark it “Not done yet”.",
   "autopay-off": "Auto-pay is off. Nothing will be charged automatically; pay each PayPal invoice yourself.",
   held: "Marked “Not done yet”. That part won't be charged or chased until it's sorted out. The other parts are unchanged.",
+  confirmed: "Confirmed. That part is due on its date again.",
+  still: "Sent. It stays on hold until it's fixed.",
+  replied: "Reply sent.",
+  "part-on": "Auto-pay is on for that part.",
+  "part-off": "Auto-pay is off for that part. Pay it from its PayPal invoice.",
   released: "Hold lifted. That part is due on its original date again.",
   date: "New date approved.",
 };
@@ -38,12 +48,12 @@ const PROBLEM: Record<string, string> = {
   busy: "Too many tries in a short time. Please wait a few minutes and try again.",
 };
 
-function StatusChip({ part, autopay }: { part: Part; autopay: boolean }) {
+function StatusChip({ part }: { part: Part }) {
   const map: Record<Part["status"], [string, string]> = {
     paid: ["Paid", "bg-cleared-soft text-cleared"],
-    on_hold: ["Not done yet", "bg-pending-soft text-pending"],
-    sent: [autopay ? "Invoiced · auto-pay on its date" : "Invoiced", "bg-line text-ink"],
-    scheduled: [autopay ? "Auto-pay on its date" : "Scheduled", "bg-line text-ink"],
+    on_hold: [part.fixedAt ? "Fixed? Confirm" : "Not done yet", "bg-pending-soft text-pending"],
+    sent: ["Invoiced", "bg-line text-ink"],
+    scheduled: ["Scheduled", "bg-line text-ink"],
     cancelled: ["Cancelled", "bg-line text-muted"],
   };
   const [label, cls] = map[part.status];
@@ -59,6 +69,8 @@ export default async function SchedulePage({ params, searchParams }: PageProps<"
   const { schedule } = found;
   const parts = found.parts as Part[];
   const charges = found.charges as Charge[];
+  const messages = found.messages as Message[];
+  const approved = schedule.status === "approved";
   const freelancer = freelancerName();
   const today = (await now()).toISOString().slice(0, 10);
   const largest = Math.max(...parts.filter((p) => p.status !== "paid").map((p) => p.amount), 0);
@@ -101,77 +113,124 @@ export default async function SchedulePage({ params, searchParams }: PageProps<"
         </p>
       )}
 
-      <ol aria-label="Schedule" className="grid gap-3">
-        {parts.map((p) => {
-          const tried = charges.filter((c) => c.partId === p.id && c.outcome !== "captured").at(-1);
-          const open = p.status !== "paid" && p.status !== "cancelled";
-          return (
-            <li key={p.id} className={`grid gap-3 rounded-xl border bg-card p-5 ${p.status === "on_hold" ? "border-pending/40" : "border-line"}`}>
-              <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1">
-                <p className="min-w-0 font-medium" dir="auto">
-                  <span className="text-muted tabular-nums">{p.seq}. </span>
-                  {p.name}
-                </p>
-                <p className="font-display text-xl font-semibold tabular-nums">{money(p.amount, schedule.currency)}</p>
-                <p className="text-sm text-muted">
-                  Due {date(p.dueDate)}
-                  {p.dueDate <= today && open && p.status !== "on_hold" ? " · due now" : ""}
-                </p>
-                {schedule.status === "approved" && (
-                  <div className="justify-self-end">
-                    <StatusChip part={p} autopay={schedule.autopay} />
+      <section aria-label="Schedule" className="overflow-hidden rounded-xl border border-line bg-card">
+        <div className={`hidden gap-3 border-b border-line px-5 py-2.5 text-xs font-medium uppercase tracking-wide text-muted sm:grid ${approved ? "sm:grid-cols-[1fr_7rem_6rem_7.5rem_4.5rem]" : "sm:grid-cols-[1fr_7rem_6rem]"}`}>
+          <span>{kind[0].toUpperCase() + kind.slice(1)}</span>
+          <span>Due</span>
+          <span className="text-right">Amount</span>
+          {approved && (
+            <>
+              <span>Status</span>
+              <span className="text-right">Auto-pay</span>
+            </>
+          )}
+        </div>
+        <ol className="divide-y divide-line">
+          {parts.map((p) => {
+            const tried = charges.filter((c) => c.partId === p.id && c.outcome !== "captured").at(-1);
+            const open = p.status !== "paid" && p.status !== "cancelled";
+            const thread = messages.filter((m) => m.partId === p.id);
+            return (
+              <li key={p.id} className={`grid gap-3 px-5 py-4 ${p.status === "on_hold" ? "bg-pending-soft/40" : ""}`}>
+                <div className={`grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 ${approved ? "sm:grid-cols-[1fr_7rem_6rem_7.5rem_4.5rem]" : "sm:grid-cols-[1fr_7rem_6rem]"}`}>
+                  <p className="min-w-0 font-medium" dir="auto">
+                    <span className="text-muted tabular-nums">{p.seq}. </span>
+                    {p.name}
+                  </p>
+                  <p className="order-3 text-sm text-muted tabular-nums sm:order-none">
+                    <span className="sm:hidden">Due </span>
+                    {date(p.dueDate)}
+                    {p.dueDate <= today && open && p.status !== "on_hold" ? <span className="text-pending"> · due now</span> : null}
+                  </p>
+                  <p className="text-right font-display text-lg font-semibold tabular-nums">{money(p.amount, schedule.currency)}</p>
+                  {approved && (
+                    <>
+                      <div className="order-4 sm:order-none">
+                        <StatusChip part={p} />
+                      </div>
+                      <div className="order-5 flex items-center justify-end gap-2 sm:order-none">
+                        <span className="text-xs text-muted sm:hidden">Auto-pay</span>
+                        {!open ? (
+                          <span className="text-xs text-muted">—</span>
+                        ) : schedule.autopay ? (
+                          <form action={setPartAutopay.bind(null, publicId, p.id, !p.autopay)}>
+                            <SwitchButton on={p.autopay} label={`Auto-pay for ${p.name}`} />
+                          </form>
+                        ) : (
+                          <form action="/pay/start" method="post">
+                            <input type="hidden" name="s" value={publicId} />
+                            <SwitchButton on={false} label={`Turn on auto-pay (approve on PayPal) for ${p.name}`} />
+                          </form>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {approved && open && p.status !== "on_hold" && (
+                  <div>
+                    <NotDoneDialog
+                      action={holdPart.bind(null, publicId, p.id)}
+                      title={`What's missing in “${p.name}”?`}
+                      prompt={`${freelancer} sees this. This ${kind} won't be charged or chased until it's sorted out; the others stay as they are.`}
+                      submitLabel="Mark not done yet"
+                    />
                   </div>
                 )}
-              </div>
 
-              {p.status === "on_hold" && (
-                <div className="grid gap-2 rounded-lg bg-pending-soft/60 p-3 text-sm">
-                  {p.holdNote && (
-                    <p dir="auto">
-                      <span className="text-muted">Your note: </span>
-                      {p.holdNote}
+                {p.status === "on_hold" && (
+                  <div className="grid gap-3 rounded-lg border border-pending/30 bg-card p-3 text-sm">
+                    <p className="font-semibold text-pending">
+                      {p.fixedAt ? `${freelancer} says it's fixed. Is it done?` : p.proposedDueDate ? `${freelancer} proposes a new date: ${date(p.proposedDueDate)}` : `Not done yet · waiting for ${freelancer}`}
                     </p>
-                  )}
-                  {p.proposedDueDate ? (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <p>
-                        {freelancer} proposes a new date: <strong>{date(p.proposedDueDate)}</strong>
-                      </p>
-                      <form action={approveNewDate.bind(null, publicId, p.id)}>
-                        <button className="rounded-md bg-ink px-3 py-1.5 text-sm font-semibold text-white">Approve new date</button>
-                      </form>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {p.fixedAt && (
+                        <>
+                          <form action={confirmFixed.bind(null, publicId, p.id)}>
+                            <button className="rounded-md bg-cleared px-3 py-1.5 font-semibold text-white">Yes, it&apos;s done</button>
+                          </form>
+                          <NotDoneDialog action={stillNotDone.bind(null, publicId, p.id)} label="Still not done" title="What's still missing?" prompt={`Tell ${freelancer} what still needs fixing.`} />
+                        </>
+                      )}
+                      {p.proposedDueDate && (
+                        <form action={approveNewDate.bind(null, publicId, p.id)}>
+                          <button className="rounded-md bg-ink px-3 py-1.5 font-semibold text-white">Approve {date(p.proposedDueDate)}</button>
+                        </form>
+                      )}
+                      {!p.fixedAt && (
+                        <form action={releaseHold.bind(null, publicId, p.id)}>
+                          <button className="rounded-md px-2 py-1.5 font-medium text-cleared hover:underline">It&apos;s done now: lift the hold</button>
+                        </form>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-muted">Waiting for {freelancer} to propose a new date.</p>
-                  )}
-                  <form action={releaseHold.bind(null, publicId, p.id)}>
-                    <button className="text-sm font-medium text-cleared hover:underline">It&apos;s done now: lift the hold</button>
-                  </form>
-                </div>
-              )}
+                  </div>
+                )}
 
-              {schedule.status === "approved" && open && p.status !== "on_hold" && (
-                <details className="text-sm">
-                  <summary className="cursor-pointer w-fit font-medium text-pending">Not done yet?</summary>
-                  <form action={holdPart.bind(null, publicId, p.id)} className="mt-2 grid gap-2">
-                    <label htmlFor={`note-${p.id}`} className="text-muted">
-                      Tell {freelancer} what&apos;s missing (optional). This {kind} won&apos;t be charged or chased; the others stay as they are.
-                    </label>
-                    <textarea id={`note-${p.id}`} name="note" rows={2} maxLength={500} dir="auto" className="w-full min-w-0 rounded-md border border-line bg-paper px-3 py-2" />
-                    <button className="w-fit rounded-md border border-pending/40 bg-pending-soft px-3 py-1.5 font-semibold text-pending">Mark “Not done yet”</button>
-                  </form>
-                </details>
-              )}
+                {thread.length > 0 && (
+                  <details className="text-sm" open={p.status === "on_hold"}>
+                    <summary className="w-fit cursor-pointer font-medium text-muted">Conversation ({thread.length})</summary>
+                    <Thread messages={thread} freelancer={freelancer} client="Client" viewer="client" />
+                    {p.status === "on_hold" && (
+                      <form action={clientReply.bind(null, publicId, p.id)} className="mt-2 flex gap-2">
+                        <input name="body" required maxLength={1000} dir="auto" placeholder={`Reply to ${freelancer}`} aria-label={`Reply to ${freelancer}`} className="min-w-0 flex-1 rounded-md border border-line bg-paper px-3 py-1.5" />
+                        <button className="rounded-md border border-line px-3 py-1.5 font-semibold">Send</button>
+                      </form>
+                    )}
+                  </details>
+                )}
 
-              {tried && open && (
-                <p className="text-xs text-pending">
-                  Auto-pay didn&apos;t charge this {kind}: {tried.outcome === "over_limit" ? "it's over your auto-pay limit" : tried.detail}. Pay it from the PayPal invoice instead.
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+                {tried && open && (
+                  <p className="text-xs text-pending">
+                    {tried.outcome === "unconfirmed"
+                      ? `PayPal is still confirming a charge for this ${kind}. Don't pay it again.`
+                      : `Auto-pay didn't charge this ${kind}: ${tried.outcome === "over_limit" ? "it's over your auto-pay limit" : tried.detail}. Pay it from the PayPal invoice instead.`}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
       {schedule.status === "proposed" ? (
         <section className="grid gap-4 rounded-xl border-2 border-ink bg-card p-6">

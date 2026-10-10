@@ -170,3 +170,8 @@ test("allocatePaid never gives a part money that already paid another part (lift
   assert.deepEqual(allocatePaid(parts, 300).map((p) => p.status), ["scheduled", "paid"]);
   assert.deepEqual(allocatePaid(parts, 600).map((p) => p.status), ["paid", "paid"]);
 });
+
+test("a milestone with its own auto-pay switched off is never charged; the others still are", () => {
+  const parts = [part(1, 100, "2026-11-01", { status: "sent", invoiceId: "I1", autopay: false }), part(2, 100, "2026-11-02", { status: "sent", invoiceId: "I2" })];
+  assert.deepEqual(partsToCharge({ schedule: schedule(), parts, today: TODAY, spendLimit: 1000 }).charge.map((p) => p.id), ["P2"]);
+});

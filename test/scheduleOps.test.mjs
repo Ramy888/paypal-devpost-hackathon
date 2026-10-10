@@ -22,7 +22,7 @@ const PAYER = { id: "PAYER-1", status: "active", vaultId: "VAULT-1", spendLimit:
 
 // In-memory store with the methods the schedule operations use.
 function memStore() {
-  const s = { schedules: [], parts: [], charges: [], payments: [] };
+  const s = { schedules: [], parts: [], charges: [], payments: [], messages: [] };
   return {
     s,
     async insertSchedule({ parts, ...row }) {
@@ -54,6 +54,9 @@ function memStore() {
     listCharges: async (ids) => s.charges.filter((c) => ids.includes(c.partId)),
     async recordPayment(id, amount) {
       s.payments.push({ id, amount });
+    },
+    async insertMessage(m) {
+      s.messages.push({ id: `M${s.messages.length + 1}`, ...m });
     },
   };
 }
@@ -375,4 +378,35 @@ test("approval and an agent pass running at the same time create one chunk invoi
 
 test("a schedule refuses a client email PayPal would reject (trailing dot)", async () => {
   await assert.rejects(createSchedule({ store: memStore(), input: input("chunks", { clientEmail: "c@acme.com." }), publicId: "p", now: NOW }), /client's email/);
+});
+
+test("the not-done-yet thread: client holds, freelancer marks it fixed, client confirms and the hold lifts", async () => {
+  const { holdPartOp, markFixedOp, confirmFixedOp, stillNotDoneOp, replyOp } = await import("../lib/scheduleOps.mjs");
+  const { store, parts } = await setup("milestones");
+  let p = (await parts())[1];
+  p = await holdPartOp({ store, part: p, note: "Logo colours are off", now: NOW });
+  p = await replyOp({ store, part: p, author: "freelancer", body: "Fixing them today", now: NOW });
+  p = await markFixedOp({ store, part: p, note: "New colours uploaded", now: NOW });
+  assert.equal(p.status, "on_hold", "fixed is the freelancer's word; the client confirms");
+  assert.ok(p.fixedAt);
+  p = await stillNotDoneOp({ store, part: p, note: "Header still blue", now: NOW });
+  assert.equal(p.fixedAt, null);
+  p = await markFixedOp({ store, part: p, note: "Header fixed", now: NOW });
+  p = await confirmFixedOp({ store, part: p, now: NOW });
+  assert.equal(p.status, "scheduled");
+  assert.deepEqual(store.s.messages.filter((m) => m.partId === p.id).map((m) => [m.author, m.kind]), [
+    ["client", "hold"], ["freelancer", "reply"], ["freelancer", "fixed"], ["client", "still_not_done"], ["freelancer", "fixed"], ["client", "confirmed"],
+  ]);
+  await assert.rejects(markFixedOp({ store, part: p, note: "x", now: NOW }), /not on hold/);
+});
+
+test("a client can switch auto-pay off and on for one milestone", async () => {
+  const { setPartAutopayOp } = await import("../lib/scheduleOps.mjs");
+  const { store, paypal, schedule, parts } = await setup("chunks");
+  await setPartAutopayOp({ store, part: (await parts())[0], autopay: false });
+  const { orders, requests } = stubOrders();
+  assert.deepEqual(await chargeDueParts({ store, paypal, orders, schedule, parts: await parts(), payer: PAYER, today: NOW }), []);
+  assert.equal(requests.length, 0);
+  await setPartAutopayOp({ store, part: (await parts())[0], autopay: true });
+  assert.deepEqual((await chargeDueParts({ store, paypal, orders, schedule, parts: await parts(), payer: PAYER, today: NOW })).map((r) => r.outcome), ["captured"]);
 });

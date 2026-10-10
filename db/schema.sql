@@ -132,3 +132,18 @@ ALTER TABLE pending_connections ADD COLUMN IF NOT EXISTS schedule_id uuid;
 
 -- At most one successful auto-pay capture is ever recorded per part.
 CREATE UNIQUE INDEX IF NOT EXISTS autopay_one_capture_per_part ON autopay_charges (part_id) WHERE outcome = 'captured';
+
+-- Per-milestone auto-pay switch, and the freelancer's "fixed" mark on a held part.
+ALTER TABLE schedule_parts ADD COLUMN IF NOT EXISTS autopay boolean NOT NULL DEFAULT true;
+ALTER TABLE schedule_parts ADD COLUMN IF NOT EXISTS fixed_at timestamptz;
+
+-- The "Not done yet" conversation on a part: client and freelancer messages, in order.
+CREATE TABLE IF NOT EXISTS part_messages (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  part_id     uuid NOT NULL REFERENCES schedule_parts (id),
+  author      text NOT NULL CHECK (author IN ('client', 'freelancer')),
+  kind        text NOT NULL CHECK (kind IN ('hold', 'reply', 'fixed', 'still_not_done', 'confirmed', 'released', 'date_proposed', 'date_approved')),
+  body        text NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS part_messages_by_part ON part_messages (part_id, created_at);

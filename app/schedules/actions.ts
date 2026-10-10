@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { proposeDateOp } from "@/lib/scheduleOps.mjs";
+import { proposeDateOp, markFixedOp, replyOp } from "@/lib/scheduleOps.mjs";
 import { ScheduleError } from "@/lib/schedules.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 import { now } from "@/lib/server/clock.mjs";
@@ -22,4 +22,33 @@ export async function proposeDate(partId: string, form: FormData) {
   }
   revalidatePath("/schedules");
   redirect("/schedules?done=proposed");
+}
+
+async function heldPart(partId: string) {
+  if (!(await isOwner())) redirect("/login");
+  const part = await pgStore().findPart(partId);
+  if (!part) redirect("/schedules");
+  return part;
+}
+
+async function run(fn: () => Promise<unknown>, done: string) {
+  try {
+    await fn();
+  } catch (err) {
+    if (!(err instanceof ScheduleError)) throw err;
+    redirect(`/schedules?error=${encodeURIComponent(err.message)}`);
+  }
+  revalidatePath("/schedules");
+  redirect(`/schedules?done=${done}`);
+}
+
+// Freelancer: what the client said was missing is fixed. The client confirms before it's due again.
+export async function markFixed(partId: string, form: FormData) {
+  const part = await heldPart(partId);
+  await run(async () => markFixedOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now() }), "fixed");
+}
+
+export async function freelancerReply(partId: string, form: FormData) {
+  const part = await heldPart(partId);
+  await run(async () => replyOp({ store: pgStore(), part, author: "freelancer", body: String(form.get("body") ?? ""), now: await now() }), "replied");
 }
