@@ -61,7 +61,6 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
 
   return (
     <div className="grid gap-8">
-      <StepBar label="Connect your AI agent" steps={CONNECT_STEPS.map((title, i) => ({ title, state: i === 0 ? "active" : "todo" }))} />
       <section className="grid gap-3 pt-4">
         <p className="text-sm font-medium text-cleared">For the client paying the invoice</p>
         <h1 className="font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">
@@ -72,6 +71,7 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
           limit you choose, and PayPal emails you a receipt every time.
         </p>
       </section>
+      <StepBar label="Connect your AI agent" steps={CONNECT_STEPS.map((title, i) => ({ title, state: i === 0 ? "active" : "todo" }))} />
 
       {ctx && (
         <section aria-label="Invoice" className="grid gap-4 rounded-xl border border-line bg-card p-5 sm:grid-cols-[1fr_auto] sm:items-center">
