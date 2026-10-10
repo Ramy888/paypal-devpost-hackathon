@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { OwnerHeader } from "@/components/OwnerHeader";
+import { Tabs, pickTab, type Tab } from "@/components/Tabs";
 import { buildDigest } from "@/lib/digest.mjs";
 import { PRO } from "@/lib/proPlan.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
@@ -74,7 +75,7 @@ function Section({ title, total, note, items, currency }: { title: string; total
   );
 }
 
-export default async function DigestPage() {
+export default async function DigestPage({ searchParams }: PageProps<"/digest">) {
   await connection();
   if (!(await isOwner())) redirect("/login");
   const { from, to } = await recentWindow(7);
@@ -82,6 +83,21 @@ export default async function DigestPage() {
   const reminders = await pgStore().listSentReminders(invoices.map((i) => i.id));
   const d = buildDigest({ invoices, reminders, retainers, from, to, planPrice: PRO.amount });
   const collected = d.byAgent.total + d.byAutopay.total + d.afterReminder.total;
+  const sections: Record<string, { title: string; total: number; note: string; items: Item[] }> = {
+    agents: { title: "Paid by clients' AI agents", total: d.byAgent.total, note: "Each line is a PayPal capture made through your agent-payable invoices.", items: d.byAgent.items },
+    autopay: { title: "Collected by auto-pay", total: d.byAutopay.total, note: "Milestones charged on their due dates, with the client's approval.", items: d.byAutopay.items },
+    reminders: { title: "Paid after a reminder", total: d.afterReminder.total, note: "Paid on or after the day CollectPilot sent a reminder for that invoice.", items: d.afterReminder.items },
+    recurring: { title: "Recurring revenue", total: d.recurring.monthly, note: "Active retainers, billed monthly by PayPal Subscriptions.", items: d.recurring.items },
+    risk: { title: "At risk", total: d.atRisk.total, note: "Unpaid and high risk. Not counted above; worth a call.", items: d.atRisk.items },
+  };
+  const tabs: Tab[] = [
+    { id: "agents", label: "AI agents", icon: "agent", count: d.byAgent.items.length },
+    { id: "autopay", label: "Auto-pay", icon: "autopay", count: d.byAutopay.items.length },
+    { id: "reminders", label: "After reminders", icon: "bell", count: d.afterReminder.items.length },
+    { id: "recurring", label: "Recurring", icon: "repeat", count: d.recurring.items.length },
+    { id: "risk", label: "At risk", icon: "alert", count: d.atRisk.items.length },
+  ];
+  const active = pickTab(tabs, (await searchParams).tab);
 
   return (
     <div className="min-h-full bg-paper">
@@ -110,41 +126,8 @@ export default async function DigestPage() {
             {failed > 0 ? `PayPal didn't return ${failed} invoice${failed === 1 ? "" : "s"}, so these totals may be low. Refresh in a minute.` : "Only your latest 100 invoices are counted."}
           </p>
         )}
-        <Section
-          title="Paid by clients' AI agents"
-          total={d.byAgent.total}
-          note="Each line is a PayPal capture made through your agent-payable invoices."
-          items={d.byAgent.items}
-          currency={d.currency}
-        />
-        <Section
-          title="Collected by auto-pay"
-          total={d.byAutopay.total}
-          note="Schedule parts charged on their due dates, with the client's approval."
-          items={d.byAutopay.items}
-          currency={d.currency}
-        />
-        <Section
-          title="Paid after a reminder"
-          total={d.afterReminder.total}
-          note="Paid on or after the day CollectPilot sent a reminder for that invoice."
-          items={d.afterReminder.items}
-          currency={d.currency}
-        />
-        <Section
-          title="Recurring revenue"
-          total={d.recurring.monthly}
-          note="Active retainers, billed monthly by PayPal Subscriptions."
-          items={d.recurring.items}
-          currency={d.currency}
-        />
-        <Section
-          title="At risk"
-          total={d.atRisk.total}
-          note="Unpaid and high risk. Not counted above; worth a call."
-          items={d.atRisk.items}
-          currency={d.currency}
-        />
+        <Tabs tabs={tabs} active={active} basePath="/digest" label="Digest sections" />
+        <Section {...sections[active]} currency={d.currency} />
         {d.other.total > 0 && (
           <p className="text-sm text-muted">
             Clients also paid {money(d.other.total, d.currency)} on their own in this period. CollectPilot doesn&apos;t take credit for that.

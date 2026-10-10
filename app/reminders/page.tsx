@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { OwnerHeader } from "@/components/OwnerHeader";
+import { Tabs, pickTab, type Tab } from "@/components/Tabs";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { pgStore } from "@/lib/server/db.mjs";
@@ -39,6 +40,11 @@ const RISK = {
   high: "bg-ink text-white",
 } as const;
 const STAGE = ["", "Friendly nudge", "Follow-up", "Final notice"];
+const EMPTY: Record<string, string> = {
+  waiting: "Nothing to review. Overdue invoices get a draft here automatically.",
+  sent: "No reminders sent yet.",
+  cancelled: "No cancelled reminders.",
+};
 
 function ReminderCard({ r, today, pro }: { r: Reminder; today: Date; pro: boolean }) {
   const hoursLeft = Math.max(0, Math.round((new Date(r.autoSendAt).getTime() - today.getTime()) / 3_600_000));
@@ -105,7 +111,7 @@ function ReminderCard({ r, today, pro }: { r: Reminder; today: Date; pro: boolea
   );
 }
 
-export default async function RemindersPage() {
+export default async function RemindersPage({ searchParams }: PageProps<"/reminders">) {
   await connection();
   if (!(await isOwner())) redirect("/login");
   const [reminders, today, offset, pro]: [Reminder[], Date, number, boolean] = await Promise.all([
@@ -114,8 +120,15 @@ export default async function RemindersPage() {
     clockOffsetDays(),
     ownerIsPro(),
   ]);
-  const pending = reminders.filter((r) => r.status === "drafted");
-  const done = reminders.filter((r) => r.status !== "drafted");
+  const byStatus = (status: Reminder["status"]) => reminders.filter((r) => r.status === status);
+  const lists: Record<string, Reminder[]> = { waiting: byStatus("drafted"), sent: byStatus("sent"), cancelled: byStatus("cancelled") };
+  const tabs: Tab[] = [
+    { id: "waiting", label: "Waiting for you", icon: "inbox", count: lists.waiting.length },
+    { id: "sent", label: "Sent", icon: "send", count: lists.sent.length },
+    { id: "cancelled", label: "Cancelled", icon: "cancelled", count: lists.cancelled.length },
+  ];
+  const active = pickTab(tabs, (await searchParams).tab);
+  const shown = lists[active];
 
   return (
     <div className="min-h-full bg-paper">
@@ -152,23 +165,14 @@ export default async function RemindersPage() {
           )}
         </section>
 
-        <section className="grid gap-4">
-          <h2 className="font-display text-2xl font-semibold tracking-tight">Waiting for you ({pending.length})</h2>
-          {pending.length === 0 ? (
-            <p className="text-muted">Nothing to review. Overdue invoices get a draft here automatically.</p>
+        <Tabs tabs={tabs} active={active} basePath="/reminders" label="Reminders" />
+        <section className="grid gap-4" aria-label={tabs.find((t) => t.id === active)!.label}>
+          {shown.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line p-6 text-sm text-muted">{EMPTY[active]}</p>
           ) : (
-            pending.map((r) => <ReminderCard key={r.id} r={r} today={today} pro={pro} />)
+            shown.map((r) => <ReminderCard key={r.id} r={r} today={today} pro={pro} />)
           )}
         </section>
-
-        {done.length > 0 && (
-          <section className="grid gap-4">
-            <h2 className="font-display text-2xl font-semibold tracking-tight">History</h2>
-            {done.map((r) => (
-              <ReminderCard key={r.id} r={r} today={today} pro={pro} />
-            ))}
-          </section>
-        )}
       </main>
     </div>
   );

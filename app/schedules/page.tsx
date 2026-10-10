@@ -43,10 +43,10 @@ export default async function SchedulesPage({ searchParams }: PageProps<"/schedu
         <section className="grid gap-2 pt-2">
           <h1 className="font-display text-4xl font-semibold tracking-tight">Payment schedules</h1>
           <p className="text-muted">
-            Jobs split into milestones or chunks. Your client approves the dates once; with auto-pay on, each part is charged on its date unless they mark it “Not done yet”.
+            Jobs split into milestones. Your client approves the dates once; with auto-pay on, each part is charged on its date unless they mark it “Not done yet”.
           </p>
           <Link href="/invoices/new" className="w-fit text-sm font-semibold text-cleared hover:underline">
-            + New schedule (choose Milestones or Chunks when you review the invoice)
+            + New schedule (choose Milestones when you review the invoice)
           </Link>
         </section>
 
@@ -72,7 +72,7 @@ export default async function SchedulesPage({ searchParams }: PageProps<"/schedu
                   <p className="font-display text-xl font-semibold tabular-nums">{money(s.total, s.currency)}</p>
                 </div>
                 <p className="text-sm text-muted">
-                  {s.clientName || s.clientEmail} · {own.length} {s.mode} · {money(paid, s.currency)} paid ·{" "}
+                  {s.clientName || s.clientEmail} · {own.length} {s.mode === "milestones" ? "milestones" : "parts"} · {money(paid, s.currency)} paid ·{" "}
                   {s.status === "proposed" ? (
                     <span className="font-semibold text-pending">waiting for the client to approve</span>
                   ) : s.autopay ? (
