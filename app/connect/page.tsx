@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { Steps } from "@/components/connect/Steps";
+import { StepBar } from "@/components/StepBar";
+import { CONNECT_STEPS } from "@/components/journeys";
 import { SPEND_LIMITS } from "@/lib/connect.mjs";
 import { paypal } from "@/lib/server/paypal";
 
@@ -60,6 +61,7 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
 
   return (
     <div className="grid gap-8">
+      <StepBar label="Connect your AI agent" steps={CONNECT_STEPS.map((title, i) => ({ title, state: i === 0 ? "active" : "todo" }))} />
       <section className="grid gap-3 pt-4">
         <p className="text-sm font-medium text-cleared">For the client paying the invoice</p>
         <h1 className="font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">
@@ -135,17 +137,6 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
           <p className="text-center text-sm text-muted">No money moves now. You can revoke access at any time.</p>
         </div>
       </form>
-
-      <section className="grid gap-4">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">How it works</h2>
-        <Steps
-          items={[
-            { title: "Approve once on PayPal", body: "PayPal asks you to allow CollectPilot to charge your account for invoices addressed to you." },
-            { title: "Get your agent key", body: "We show it once. Paste it, with the setup snippet, into your AI assistant." },
-            { title: "Your agent pays what's due", body: "It checks what you owe and pays invoices up to your limit. PayPal emails you a receipt for each one." },
-          ]}
-        />
-      </section>
     </div>
   );
 }

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { Notice } from "@/components/connect/Notice";
+import { StepBar } from "@/components/StepBar";
+import { scheduleSteps } from "@/components/journeys";
 import { freelancerName, loadByPublicId } from "@/lib/server/schedules";
 import { now } from "@/lib/server/clock.mjs";
 import { approveWithoutAutopay, approveNewDate, holdPart, releaseHold, turnOffAutopay } from "../actions";
@@ -69,6 +71,10 @@ export default async function SchedulePage({ params, searchParams }: PageProps<"
 
   return (
     <div className="grid gap-8">
+      <StepBar
+        label="Payment schedule"
+        steps={scheduleSteps({ approved: schedule.status === "approved", autopay: schedule.autopay, kind, paid: parts.filter((p) => p.status === "paid").length, total: parts.length, held: parts.filter((p) => p.status === "on_hold").length })}
+      />
       <section className="grid gap-3 pt-4">
         <p className="text-sm font-medium text-cleared">
           {schedule.status === "proposed" ? `A payment schedule from ${freelancer}` : `Your payment schedule with ${freelancer}`}

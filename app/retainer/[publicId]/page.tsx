@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
-import { Steps } from "@/components/connect/Steps";
+import { StepBar } from "@/components/StepBar";
+import { RETAINER_STEPS } from "@/components/journeys";
 import { Notice } from "@/components/connect/Notice";
 import { pgStore } from "@/lib/server/db.mjs";
 
@@ -29,6 +30,7 @@ export default async function RetainerOfferPage({ params, searchParams }: PagePr
 
   return (
     <div className="grid gap-8">
+      <StepBar label="Monthly retainer" steps={RETAINER_STEPS.map((title, i) => ({ title, state: i === 0 ? "active" : "todo" }))} />
       <section className="grid gap-3 pt-4">
         <p className="text-sm font-medium text-cleared">An offer from {freelancer}</p>
         <h1 className="font-display text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">
@@ -72,17 +74,6 @@ export default async function RetainerOfferPage({ params, searchParams }: PagePr
         </button>
         <p className="text-center text-sm text-muted">The first month is charged when you approve. Nothing is charged if you go back.</p>
       </form>
-
-      <section className="grid gap-4">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">What happens next</h2>
-        <Steps
-          items={[
-            { title: "Approve on PayPal", body: `PayPal shows the amount and asks you to confirm the monthly retainer with ${freelancer}.` },
-            { title: "First month is paid", body: "PayPal charges the first month right away and emails you a receipt." },
-            { title: "Then once a month", body: "PayPal bills the same amount each month. Cancel any time from your PayPal account or by asking the freelancer." },
-          ]}
-        />
-      </section>
     </div>
   );
 }

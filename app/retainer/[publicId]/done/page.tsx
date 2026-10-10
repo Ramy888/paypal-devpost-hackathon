@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
-import { Steps, type StepState } from "@/components/connect/Steps";
+import { StepBar } from "@/components/StepBar";
+import { RETAINER_STEPS } from "@/components/journeys";
 import { pgStore } from "@/lib/server/db.mjs";
 import { paypal } from "@/lib/server/paypal";
 
@@ -25,10 +26,20 @@ export default async function RetainerDonePage({ params }: PageProps<"/retainer/
   const lastPaid = sub?.billing_info?.last_payment?.time ?? r.lastPaymentAt;
   const next = sub?.billing_info?.next_billing_time;
   const firstPaid = Boolean(lastPaid) || r.paymentsCount > 0;
-  const steps: StepState[] = ["done", firstPaid ? "done" : "active", firstPaid ? "active" : "todo"];
+  const steps = RETAINER_STEPS.map((title, i) => ({
+    title,
+    state: i < 2 ? ("done" as const) : i === 2 ? (firstPaid ? ("done" as const) : ("active" as const)) : firstPaid ? ("active" as const) : ("todo" as const),
+    status: [
+      "Reviewed",
+      r.activatedAt ? `Done ${day(r.activatedAt)}` : "Done",
+      firstPaid ? `Paid${lastPaid ? ` ${day(lastPaid)}` : ""}` : "PayPal is collecting it",
+      next ? `Next ${day(next)}` : firstPaid ? "Every month" : undefined,
+    ][i],
+  }));
 
   return (
     <div className="grid gap-8">
+      <StepBar label="Monthly retainer" steps={steps} />
       <section className="grid gap-3 pt-4">
         <span aria-hidden className="grid h-10 w-10 place-items-center rounded-full bg-cleared text-xl text-white">
           ✓
@@ -37,25 +48,6 @@ export default async function RetainerDonePage({ params }: PageProps<"/retainer/
         <p className="max-w-[60ch] text-lg leading-relaxed text-muted">
           {money(r.amount, r.currency)} a month to {freelancer} for {r.description}. PayPal handles the billing and emails you each receipt.
         </p>
-      </section>
-
-      <section className="grid gap-4 rounded-xl border border-line bg-card p-6">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">Status</h2>
-        <Steps
-          items={[
-            { title: "Approved on PayPal", body: "Your monthly retainer is active.", state: steps[0] },
-            {
-              title: "First month paid",
-              body: firstPaid ? `Paid${lastPaid ? ` on ${day(lastPaid)}` : ""}. PayPal emailed you the receipt.` : "PayPal is collecting the first month now. Refresh this page in a minute to see the receipt date.",
-              state: steps[1],
-            },
-            {
-              title: "Next monthly payment",
-              body: next ? `PayPal bills ${money(r.amount, r.currency)} on ${day(next)}.` : "PayPal bills the same amount each month.",
-              state: steps[2],
-            },
-          ]}
-        />
       </section>
 
       <p className="text-sm leading-relaxed text-muted">

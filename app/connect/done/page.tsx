@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CopyField } from "@/components/connect/CopyField";
-import { Steps, type StepState } from "@/components/connect/Steps";
+import { StepBar, statesInOrder } from "@/components/StepBar";
+import { CONNECT_STEPS } from "@/components/journeys";
 import { pgStore } from "@/lib/server/db.mjs";
 import { unsign } from "@/lib/server/session";
 import { COOKIE } from "@/lib/server/connectCookies";
@@ -14,11 +15,6 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 const day = (d: Date | string) => new Date(d).toLocaleDateString("en-US", { dateStyle: "medium" });
 
 // Marks the first unfinished step as the one to do next.
-function withStates(done: boolean[]): StepState[] {
-  const next = done.indexOf(false);
-  return done.map((d, i) => (d ? "done" : i === next ? "active" : "todo"));
-}
-
 export default async function DonePage() {
   const jar = await cookies();
   const payerId = unsign(jar.get(COOKIE.payer)?.value);
@@ -28,7 +24,13 @@ export default async function DonePage() {
   const agentKey = jar.get(COOKIE.reveal)?.value;
   // An assistant that has used the key proves it was saved, even if the button was skipped.
   const keySaved = Boolean(payer.keySavedAt || payer.firstUsedAt || payer.paymentsCount > 0);
-  const states = withStates([true, keySaved, Boolean(payer.firstUsedAt), payer.paymentsCount > 0]);
+  const states = statesInOrder([true, keySaved, Boolean(payer.firstUsedAt), payer.paymentsCount > 0]);
+  const statuses = [
+    `Done ${day(payer.createdAt)}`,
+    keySaved ? "Saved" : "Copy it below",
+    payer.firstUsedAt ? `Checked in ${day(payer.firstUsedAt)}` : keySaved ? "Add the setup below" : undefined,
+    payer.paymentsCount > 0 ? `${payer.paymentsCount} paid` : undefined,
+  ];
   const mcpUrl = `${process.env.APP_URL}/mcp`;
   const snippet = JSON.stringify(
     { mcpServers: { collectpilot: { type: "http", url: mcpUrl, headers: { Authorization: `Bearer ${agentKey ?? "<your agent key>"}` } } } },
@@ -38,6 +40,7 @@ export default async function DonePage() {
 
   return (
     <div className="grid gap-8">
+      <StepBar label="Connect your AI agent" steps={CONNECT_STEPS.map((title, i) => ({ title, state: states[i], status: statuses[i] }))} />
       <section className="grid gap-4 pt-4">
         <span className="grid h-12 w-12 place-items-center rounded-full bg-cleared text-2xl text-white" aria-hidden>
           ✓
@@ -88,32 +91,6 @@ export default async function DonePage() {
           <CopyField label="Setup for your AI assistant (MCP)" value={snippet} multiline />
         </section>
       )}
-
-      <section className="grid gap-4">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">Your setup</h2>
-        <Steps
-          items={[
-            { title: "Approve on PayPal", body: `Done on ${day(payer.createdAt)}. CollectPilot may charge your PayPal account for invoices addressed to you.` },
-            {
-              title: "Save your agent key",
-              body: keySaved ? "Saved. We no longer show it." : "Copy the key above and keep it with your other secrets.",
-            },
-            {
-              title: "Connect your AI assistant",
-              body: payer.firstUsedAt
-                ? `Connected. Your assistant first checked in on ${day(payer.firstUsedAt)}.`
-                : "Add the setup snippet to your assistant's MCP settings. This step ticks off when it first checks in.",
-            },
-            {
-              title: "First invoice paid",
-              body:
-                payer.paymentsCount > 0
-                  ? `${payer.paymentsCount} ${payer.paymentsCount === 1 ? "invoice" : "invoices"} paid · ${money(payer.paidTotal)} · latest ${day(payer.lastPaymentAt!)}`
-                  : `Waiting for your assistant to pay an invoice. Ask it: "What do I owe through CollectPilot? Pay anything overdue."`,
-            },
-          ].map((item, i) => ({ ...item, state: states[i] }))}
-        />
-      </section>
 
       <section className="grid gap-2 rounded-xl border border-line bg-card p-6">
         <h2 className="font-medium">How payments work</h2>
