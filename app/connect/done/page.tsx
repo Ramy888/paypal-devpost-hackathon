@@ -98,11 +98,18 @@ export default async function DonePage({ searchParams }: PageProps<"/connect/don
           <p className="min-w-0 flex-1">
             <strong>Your assistant is connected.</strong> It first checked in on {day(payer.firstUsedAt)}. Ask it “{firstQuestion}” any time.
           </p>
+          <a href="/connect/assistant" className="rounded-md bg-cleared px-3 py-1.5 font-semibold text-white">Open built-in assistant</a>
         </section>
       ) : (
         <section className={`grid gap-5 rounded-xl border bg-card p-6 ${keySaved ? "border-2 border-ink" : "border-line"}`}>
+          <a href="/connect/assistant" className="flex flex-wrap items-center gap-3 rounded-lg border border-cleared/40 bg-cleared-soft p-4 text-sm text-cleared hover:border-cleared">
+            <span className="min-w-0 flex-1">
+              <strong>No AI assistant? Use the one built in.</strong> Chat with it here: no setup, and every payment waits for your Confirm.
+            </span>
+            <span className="rounded-md bg-cleared px-3 py-1.5 font-semibold text-white">Open assistant</span>
+          </a>
           <div className="grid gap-1">
-            <h2 className="font-display text-2xl font-semibold tracking-tight">Connect your assistant</h2>
+            <h2 className="font-display text-2xl font-semibold tracking-tight">Or connect your own assistant</h2>
             <p className="text-sm leading-relaxed text-muted">
               Add CollectPilot to your AI assistant once. {agentKey ? "Your key is already filled in below." : "Replace <your agent key> with the key you saved."}
             </p>
