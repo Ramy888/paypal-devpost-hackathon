@@ -19,6 +19,8 @@ export type InvoiceRow = {
   days_overdue: number;
   risk: string;
   expected_pay_date: string;
+  project: string; // "Acme site · 2/3" for an invoice that is part of a payment schedule
+  held: boolean; // the client marked this part "Not done yet"
   // Per-row amounts the cash-panel tiles sum (0 when paid or not applicable).
   outstanding: number;
   overdue_amount: number;
@@ -30,6 +32,7 @@ type LiveEvent = { invoice_id: string; status: string; received_at: string };
 
 const FIELDS = [
   { id: "invoice_number", name: "Invoice", format: "textFormat" },
+  { id: "project", name: "Schedule", format: "textFormat" },
   { id: "client", name: "Client", format: "textFormat" },
   { id: "amount", name: "Amount", format: "currencyFormat" },
   { id: "status", name: "Status", format: "textFormat" },
@@ -116,11 +119,12 @@ function PhoneList({ rows }: { rows: InvoiceRow[] }) {
           <span className="truncate font-medium">{r.client}</span>
           <span className="text-right font-semibold tabular-nums">{money(r.amount, r.currency)}</span>
           <span className="truncate font-mono text-xs text-zinc-500">
+            {r.project ? `${r.project} · ` : ""}
             {r.invoice_number} · due {r.due_date}
             {r.expected_pay_date && ` · expect ${r.expected_pay_date}`}
           </span>
           <span className={`text-right text-xs font-semibold ${r.paid ? "text-emerald-700" : r.days_overdue > 0 ? "text-amber-700" : "text-zinc-500"}`}>
-            {r.paid ? "Paid" : r.days_overdue > 0 ? `${r.days_overdue}d overdue` : r.status.toLowerCase()}
+            {r.paid ? "Paid" : r.held ? "On hold" : r.days_overdue > 0 ? `${r.days_overdue}d overdue` : r.status.toLowerCase()}
           </span>
         </li>
       ))}
@@ -166,6 +170,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
         <nav className="flex gap-4 font-medium text-emerald-700">
           <Link href="/invoices/new">New invoice</Link>
           <Link href="/reminders">Reminders</Link>
+          <Link href="/schedules">Schedules</Link>
           <Link href="/retainers">Retainers</Link>
           <Link href="/digest">Digest</Link>
         </nav>

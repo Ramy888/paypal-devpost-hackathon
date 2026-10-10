@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { runSchedules, loadOverrides } from "@/lib/server/schedules";
+import { serialized } from "@/lib/server/queue";
 import { tick } from "@/lib/reminders.mjs";
 import { DEFAULT_MODEL } from "@/lib/draftInvoice.mjs";
 import { pgStore } from "./db.mjs";
@@ -7,7 +9,6 @@ import { paypal } from "./paypal";
 import { allow } from "./rateLimit";
 import { ownerIsPro } from "./pro";
 
-const g = globalThis as typeof globalThis & { __collectpilotTick?: Promise<unknown> };
 
 /**
  * One reminder-agent pass. `draft` spends the Anthropic API key, so only the freelancer's
@@ -15,8 +16,17 @@ const g = globalThis as typeof globalThis & { __collectpilotTick?: Promise<unkno
  * Passes never overlap.
  */
 export async function runTick({ draft }: { draft: boolean }) {
-  if (g.__collectpilotTick) await g.__collectpilotTick.catch(() => {});
-  const pass = tick({
+  // Passes run one at a time, behind any approval that is creating a chunk invoice.
+  return serialized(() => onePass(draft));
+}
+
+async function onePass(draft: boolean) {
+  // Payment schedules first: a part auto-pay collects today needs no reminder.
+  const schedules = await runSchedules().catch((err) => {
+    console.error(JSON.stringify({ msg: "schedules pass failed", error: String(err) }));
+    return null;
+  });
+  const result = await tick({
     paypal: paypal(),
     anthropic: new Anthropic(),
     store: pgStore(),
@@ -27,13 +37,8 @@ export async function runTick({ draft }: { draft: boolean }) {
     draft,
     autoSend: await ownerIsPro(),
     canSpend: () => allow("reminder-draft", 50, 24 * 60 * 60_000),
+    overrides: await loadOverrides(),
   });
-  g.__collectpilotTick = pass;
-  try {
-    const result = await pass;
-    console.log(JSON.stringify({ msg: "agent tick", draft, ...result }));
-    return result;
-  } finally {
-    g.__collectpilotTick = undefined;
-  }
+  console.log(JSON.stringify({ msg: "agent tick", draft, ...result, schedules }));
+  return { ...result, schedules };
 }

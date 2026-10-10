@@ -81,7 +81,7 @@ export default async function DigestPage() {
   const [{ invoices, failed, more }, retainers] = await Promise.all([invoicesWithPayments(), pgStore().listRetainers()]);
   const reminders = await pgStore().listSentReminders(invoices.map((i) => i.id));
   const d = buildDigest({ invoices, reminders, retainers, from, to, planPrice: PRO.amount });
-  const collected = d.byAgent.total + d.afterReminder.total;
+  const collected = d.byAgent.total + d.byAutopay.total + d.afterReminder.total;
 
   return (
     <div className="min-h-full bg-paper">
@@ -115,6 +115,13 @@ export default async function DigestPage() {
           total={d.byAgent.total}
           note="Each line is a PayPal capture made through your agent-payable invoices."
           items={d.byAgent.items}
+          currency={d.currency}
+        />
+        <Section
+          title="Collected by auto-pay"
+          total={d.byAutopay.total}
+          note="Schedule parts charged on their due dates, with the client's approval."
+          items={d.byAutopay.items}
           currency={d.currency}
         />
         <Section

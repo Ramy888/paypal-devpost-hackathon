@@ -3,6 +3,7 @@ import { eventStore } from "@/lib/events.mjs";
 import { paypal } from "@/lib/server/paypal";
 import { applyRetainerWebhook } from "@/lib/server/retainers";
 import { applyProWebhook } from "@/lib/server/pro";
+import { applyScheduleWebhook } from "@/lib/server/schedules";
 
 export async function POST(req: Request) {
   if (Number(req.headers.get("content-length")) > MAX_BODY) {
@@ -19,6 +20,8 @@ export async function POST(req: Request) {
   } else if (result.summary) {
     const isNew = eventStore.add(result.summary);
     console.log(JSON.stringify({ msg: isNew ? "webhook verified" : "webhook duplicate", ...result.summary }));
+    // Invoices that belong to a payment schedule also update their milestone or chunks.
+    if (isNew) await applyScheduleWebhook((result.summary as { invoice_id?: string | null }).invoice_id).catch((err) => console.error(JSON.stringify({ msg: "schedule webhook failed", error: String(err) })));
   } else if (result.status === 401) {
     console.log(JSON.stringify({ msg: "webhook signature rejected", transmission_id: req.headers.get("paypal-transmission-id") }));
   }

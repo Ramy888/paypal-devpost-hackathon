@@ -25,6 +25,8 @@ A Next.js app (`app/`) with an AG Studio receivables dashboard. PayPal webhooks 
 | `/connect` | Client page: connect your AI agent to pay invoices (PayPal approval, agent key shown once, revoke) |
 | `/mcp` | MCP server for the client's AI agent: `what_do_i_owe`, `pay_invoice` (`Authorization: Bearer <agent key>`) |
 | `/` | Receivables dashboard: cash-panel tiles, risk and expected pay date per invoice. `/?synthetic=1000` adds 1,000 clearly fake rows for load testing |
+| `/schedules` | Payment schedules: a job split into milestones (one PayPal invoice each) or chunks (one invoice paid in parts). Holds and new dates |
+| `/pay/<link>` | Client page for a schedule: approve the dates once, turn on auto-pay, mark a part "Not done yet", approve a new date |
 | `/digest` | Payback digest: money collected by clients' agents and after reminders, recurring revenue created, against the $12 plan |
 | `POST /webhooks/paypal` | PayPal webhook receiver; each signature is verified with PayPal |
 | `/api/stream` | Server-Sent Events feed of verified invoice events |
@@ -38,6 +40,16 @@ npm test        # unit tests (node:test)
 ```
 
 AG Studio shows a watermark until a licence key is configured.
+
+### Payment schedules and auto-pay
+
+The freelancer picks **In full**, **Milestones** or **Chunks** when reviewing an invoice and dates each part upfront. The client approves the schedule once at `/pay/<link>` and can turn on auto-pay. That approval uses a PayPal vault setup token with a per-charge limit of the largest part. The 10-minute agent tick (`lib/server/schedules.ts`, on the demo clock) then:
+
+- sends each milestone's PayPal invoice 3 days before its date (chunks get one invoice with `partial_payment` allowed, minimum = smallest part);
+- charges each due part once with the client's saved PayPal token through the Server SDK, recording every attempt in `autopay_charges`;
+- skips any part the client marked "Not done yet". The freelancer proposes a new date, and it applies only after the client approves it. Reminders skip held parts too.
+
+A failed or over-limit charge is shown to both sides and never retried blindly. Normal reminders take over. The logic is in `lib/schedules.mjs` (pure) and `lib/scheduleOps.mjs`.
 
 ### PayPal APIs and SDKs
 

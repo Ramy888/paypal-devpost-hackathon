@@ -130,3 +130,28 @@ test("keys without the agent prefix are rejected before any lookup", async () =>
   assert.equal(await payerForKey({ store, agentKey: "random" }), null);
   assert.equal(looked, false);
 });
+
+test("auto-pay for a schedule: consent names the schedule and a per-charge limit, and the result carries the schedule", async () => {
+  const pp = fakePayPal();
+  const store = memoryStore();
+  const { nonce } = await start(pp, store, { invoiceId: "", spendLimit: 1200, schedule: { id: "SCH-1", title: "Acme website" } });
+  const description = pp.calls[0].body.payment_source.paypal.description;
+  assert.match(description, /Acme website/);
+  assert.match(description, /1200 USD per charge/);
+  assert.equal(store.pending[0].scheduleId, "SCH-1");
+  const { pending } = await completeConnection({ paypal: pp, store, nonce, now: NOW });
+  assert.equal(pending.scheduleId, "SCH-1");
+});
+
+test("a schedule's limit is its largest part, not one of the agent limits", async () => {
+  await assert.rejects(start(fakePayPal(), memoryStore(), { spendLimit: 0, schedule: { id: "S", title: "T" } }), { code: "BAD_LIMIT" });
+});
+
+test("an auto-pay approval for a schedule issues no agent key", async () => {
+  const pp = fakePayPal();
+  const store = memoryStore();
+  const { nonce } = await start(pp, store, { invoiceId: "", spendLimit: 5000, schedule: { id: "SCH-1", title: "Big job" } });
+  const { agentKey, payer } = await completeConnection({ paypal: pp, store, nonce, now: NOW });
+  assert.equal(agentKey, null);
+  assert.ok(payer.agentKeyHash, "an unusable hash still fills the column");
+});

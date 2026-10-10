@@ -79,3 +79,56 @@ CREATE TABLE IF NOT EXISTS retainers (
   activated_at     timestamptz,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
+
+-- Payment schedules: a job split into dated parts the client approves once (milestones or chunks).
+CREATE TABLE IF NOT EXISTS schedules (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id    text NOT NULL UNIQUE,
+  mode         text NOT NULL CHECK (mode IN ('milestones', 'chunks')),
+  title        text NOT NULL,
+  client_email text NOT NULL,
+  client_name  text NOT NULL DEFAULT '',
+  currency     text NOT NULL,
+  total        numeric(12, 2) NOT NULL,
+  status       text NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed', 'approved', 'cancelled')),
+  autopay      boolean NOT NULL DEFAULT false,
+  payer_id     uuid REFERENCES payers (id),
+  invoice_id   text,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  approved_at  timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS schedule_parts (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  schedule_id        uuid NOT NULL REFERENCES schedules (id),
+  seq                smallint NOT NULL,
+  name               text NOT NULL,
+  amount             numeric(12, 2) NOT NULL,
+  due_date           date NOT NULL,
+  status             text NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'sent', 'paid', 'on_hold', 'cancelled')),
+  status_before_hold text,
+  invoice_id         text,
+  hold_note          text NOT NULL DEFAULT '',
+  held_at            timestamptz,
+  proposed_due_date  date,
+  paid_at            timestamptz,
+  capture_id         text,
+  UNIQUE (schedule_id, seq)
+);
+
+-- Every auto-pay attempt, kept as the audit trail shown to both sides.
+CREATE TABLE IF NOT EXISTS autopay_charges (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  part_id      uuid NOT NULL REFERENCES schedule_parts (id),
+  amount       numeric(12, 2) NOT NULL,
+  outcome      text NOT NULL CHECK (outcome IN ('captured', 'failed', 'unconfirmed', 'over_limit')),
+  capture_id   text,
+  detail       text NOT NULL DEFAULT '',
+  attempted_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- A PayPal approval started from a payment schedule (auto-pay) rather than for an AI agent.
+ALTER TABLE pending_connections ADD COLUMN IF NOT EXISTS schedule_id uuid;
+
+-- At most one successful auto-pay capture is ever recorded per part.
+CREATE UNIQUE INDEX IF NOT EXISTS autopay_one_capture_per_part ON autopay_charges (part_id) WHERE outcome = 'captured';

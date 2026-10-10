@@ -91,3 +91,15 @@ test("cancelled invoices are never at risk; partly paid ones count what is still
   });
   assert.deepEqual(d.atRisk.items.map((i) => [i.invoiceNumber, i.amount]), [["CP-P", 400]]);
 });
+
+test("auto-pay collections are credited separately, each tied to its PayPal capture", async () => {
+  const { AUTOPAY_NOTE_PREFIX } = await import("../lib/agentPay.mjs");
+  const d = buildDigest({
+    invoices: [invoice("A1", "CP-A", "PARTIALLY_PAID", "3000.00", [tx("2026-10-20", "900.00", `${AUTOPAY_NOTE_PREFIX} PayPal capture CAPX (order OX)`)])],
+    reminders: [], retainers: [], from: FROM, to: TO, planPrice: 12,
+  });
+  assert.equal(d.byAutopay.total, 900);
+  assert.match(d.byAutopay.items[0].evidence, /CAPX/);
+  assert.equal(d.byAgent.total, 0);
+  assert.equal(d.value, 900);
+});

@@ -6,6 +6,7 @@ import { paypal } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
 import { redirect } from "next/navigation";
 import { isOwner } from "@/lib/server/owner";
+import { loadOverrides } from "@/lib/server/schedules";
 
 // Clearly fake rows for load testing: /?synthetic=1000. Built as PayPal invoices so
 // risk, expected date and tile amounts follow the same rules as real rows.
@@ -31,7 +32,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const { synthetic } = await searchParams;
   const list = await paypal().request("GET", "/v2/invoicing/invoices?page_size=100&total_required=true");
   const today = await now();
-  const real: InvoiceRow[] = (list.items ?? []).map((inv: unknown) => toRow(inv, today));
+  const overrides = await loadOverrides();
+  const real: InvoiceRow[] = (list.items ?? []).map((inv: { id: string }) => toRow(inv, today, overrides.get(inv.id) ?? null));
   const extra = Math.min(Number(synthetic) || 0, 5000);
   return <DashboardLoader rows={[...real, ...syntheticRows(extra, today)]} nowIso={today.toISOString()} />;
 }

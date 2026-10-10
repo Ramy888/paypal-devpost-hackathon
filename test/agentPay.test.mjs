@@ -185,3 +185,62 @@ test("the SDK only runs against PayPal's own sandbox or live host", () => {
   assert.equal(environmentFor("https://api-m.paypal.com"), "Production");
   for (const bad of [undefined, "", "http://localhost:4010", "https://api.sandbox.paypal.com"]) assert.throws(() => environmentFor(bad), /PAYPAL_API_BASE/);
 });
+
+const partialInvoice = (over = {}) =>
+  invoice({
+    amount: { value: "3000.00", currency_code: "USD" },
+    due_amount: { value: "3000.00", currency_code: "USD" },
+    configuration: { partial_payment: { allow_partial_payment: true, minimum_amount_due: { value: "900.00", currency_code: "USD" } } },
+    ...over,
+  });
+
+test("pays one part of an invoice that allows part payments, and the row shows partly paid", async () => {
+  const pp = fakePayPal(partialInvoice());
+  const store = createEventStore();
+  const stub = stubOrders();
+  const result = await pay(pp, { stub, amount: 900, spendLimit: 1000, eventStore: store });
+  assert.equal(result.amount, "900.00");
+  assert.equal(JSON.parse(orderRequests(stub)[0].data).purchase_units[0].amount.value, "900.00");
+  assert.equal(pp.calls.find((c) => c.path.endsWith("/payments")).body.amount.value, "900.00");
+  assert.equal(store.recent()[0].status, "PARTIALLY_PAID");
+});
+
+test("refuses part payments the invoice doesn't allow, below its minimum, or above what is due", async () => {
+  await assert.rejects(pay(fakePayPal(invoice()), { amount: 100 }), { code: "PARTIAL_NOT_ALLOWED" });
+  await assert.rejects(pay(fakePayPal(partialInvoice()), { amount: 500 }), { code: "BAD_AMOUNT", message: /smallest part payment.*900/ });
+  await assert.rejects(pay(fakePayPal(partialInvoice()), { amount: 3500, spendLimit: 5000 }), { code: "BAD_AMOUNT", message: /Only 3000.00/ });
+  await assert.rejects(pay(fakePayPal(partialInvoice()), { amount: 0 }), { code: "BAD_AMOUNT" });
+});
+
+test("the spending limit applies to the part being paid, not the whole invoice", async () => {
+  const result = await pay(fakePayPal(partialInvoice()), { amount: 900, spendLimit: 1000 });
+  assert.equal(result.paid, true);
+  await assert.rejects(pay(fakePayPal(partialInvoice()), { spendLimit: 1000 }), { code: "OVER_LIMIT" });
+});
+
+test("each payment on the same invoice sends PayPal a unique invoice id (PayPal rejects duplicates)", async () => {
+  const stub = stubOrders();
+  await pay(fakePayPal(partialInvoice()), { stub, amount: 900, spendLimit: 1000 });
+  const later = partialInvoice({ status: "PARTIALLY_PAID", due_amount: { value: "2100.00", currency_code: "USD" }, payments: { transactions: [{ payment_id: "EXTR-1" }] } });
+  await pay(fakePayPal(later), { stub, amount: 900, spendLimit: 1000 });
+  const [first, second] = orderRequests(stub).map((r) => JSON.parse(r.data).purchase_units[0].invoice_id);
+  assert.equal(first, "CP-1");
+  assert.equal(second, "CP-1-2");
+});
+
+test("a refusal names PayPal's specific reason", async () => {
+  const dup = { status: 422, body: { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "DUPLICATE_INVOICE_ID" }] } };
+  await assert.rejects(pay(fakePayPal(invoice()), { stub: stubOrders({ responses: [dup] }) }), { code: "PAYMENT_FAILED", message: /DUPLICATE_INVOICE_ID/ });
+});
+
+test("the agent's limit covers everything it pays on one invoice, so part payments can't add up past it", async () => {
+  const { AGENT_NOTE_PREFIX } = await import("../lib/agentPay.mjs");
+  const paidBefore = partialInvoice({
+    status: "PARTIALLY_PAID",
+    due_amount: { value: "2100.00", currency_code: "USD" },
+    payments: { transactions: [{ note: `${AGENT_NOTE_PREFIX} PayPal capture C0 (order O0)`, amount: { value: "900.00", currency_code: "USD" } }] },
+  });
+  await assert.rejects(pay(fakePayPal(paidBefore), { amount: 900, spendLimit: 1000 }), { code: "OVER_LIMIT", message: /already paid 900.00/ });
+  const result = await pay(fakePayPal(paidBefore), { amount: 900, spendLimit: 2000 });
+  assert.equal(result.paid, true);
+});
