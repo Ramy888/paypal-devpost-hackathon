@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { whatDoIOwe, payInvoice, AgentPayError } from "@/lib/agentPay.mjs";
 import { eventStore } from "@/lib/events.mjs";
-import { paypal } from "@/lib/server/paypal";
+import { paypal, paypalOrders } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
 import { payerForKey } from "@/lib/connect.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
@@ -48,7 +48,7 @@ function buildServer(payer: Payer) {
     },
     async ({ invoice_id }) => {
       try {
-        const result = await payInvoice({ paypal: paypal(), payer, invoiceId: invoice_id, spendLimit, eventStore });
+        const result = await payInvoice({ paypal: paypal(), orders: paypalOrders(), payer, invoiceId: invoice_id, spendLimit, eventStore });
         await pgStore().recordPayment(payer.id, Number(result.amount));
         return text(result);
       } catch (err) {

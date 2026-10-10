@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { whatDoIOwe, payInvoice } from "../lib/agentPay.mjs";
 import { createEventStore } from "../lib/events.mjs";
+import { createOrdersApi, environmentFor } from "../lib/paypalOrders.mjs";
 
 const PAYER = { email: "buyer@example.com", vaultId: "VAULT-1" };
 const NOW = new Date("2026-10-21T12:00:00Z");
@@ -17,8 +18,8 @@ const invoice = (over = {}) => ({
   ...over,
 });
 
-// Fake PayPal client that records every call and answers by path.
-function fakePayPal(inv, { orderStatus = "COMPLETED" } = {}) {
+// Fake PayPal REST client (invoicing) that records every call and answers by path.
+function fakePayPal(inv) {
   const calls = [];
   return {
     calls,
@@ -26,17 +27,39 @@ function fakePayPal(inv, { orderStatus = "COMPLETED" } = {}) {
       calls.push({ method, path, body, opts });
       if (path.startsWith("/v2/invoicing/search-invoices")) return { items: [inv, invoice({ id: "INV2-OTHER", primary_recipients: [{ billing_info: { email_address: "someone@else.com" } }] })] };
       if (path.startsWith("/v2/invoicing/invoices/") && method === "GET") return inv;
-      if (path === "/v2/checkout/orders") {
-        return { id: "ORDER-1", status: orderStatus, purchase_units: [{ payments: { captures: [{ id: "CAP-1", status: orderStatus }] } }] };
-      }
       if (path.endsWith("/payments")) return { payment_id: "EXTR-1" };
       throw new Error(`unexpected ${method} ${path}`);
     },
   };
 }
-const orders = (pp) => pp.calls.filter((c) => c.path === "/v2/checkout/orders");
+
+// The real PayPal Server SDK OrdersController over a stubbed transport (the SDK's axios-adapter
+// seam). It borrows a fake REST token, like production. `responses` answers each order request
+// in turn; like PayPal, the full body (with captures) comes back only for Prefer: return=representation.
+function stubOrders({ orderStatus = "COMPLETED", responses } = {}) {
+  const requests = [];
+  const auth = { tokens: ["tok-1", "tok-2"], revoked: 0 };
+  auth.getToken = async () => auth.tokens[auth.revoked];
+  auth.revokeToken = async () => void auth.revoked++;
+  const full = { id: "ORDER-1", status: orderStatus, purchase_units: [{ payments: { captures: [{ id: "CAP-1", status: orderStatus }] } }] };
+  const queue = [...(responses ?? [])];
+  const orders = createOrdersApi({
+    apiBase: "https://api-m.sandbox.paypal.com",
+    auth,
+    adapter: async (config) => {
+      requests.push(config);
+      const next = queue.shift() ?? { status: 201 };
+      if (next.throw) throw next.throw;
+      const prefer = config.headers.Prefer ?? config.headers.prefer;
+      const body = next.body ?? (prefer === "return=representation" ? full : { id: "ORDER-1", status: orderStatus });
+      return { data: JSON.stringify(body), status: next.status, statusText: "", headers: { "content-type": "application/json" }, config };
+    },
+  });
+  return { orders, requests, auth };
+}
+const orderRequests = (o) => o.requests.filter((r) => r.url.endsWith("/v2/checkout/orders"));
 const pay = (pp, over = {}) =>
-  payInvoice({ paypal: pp, payer: PAYER, invoiceId: "INV2-AAAA", spendLimit: 1000, now: NOW, ...over });
+  payInvoice({ paypal: pp, orders: (over.stub ?? stubOrders()).orders, payer: PAYER, invoiceId: "INV2-AAAA", spendLimit: 1000, now: NOW, ...over });
 
 test("what_do_i_owe lists only the payer's invoices, most overdue first", async () => {
   const pp = fakePayPal(invoice());
@@ -50,39 +73,50 @@ test("what_do_i_owe lists only the payer's invoices, most overdue first", async 
 
 test("refuses an invoice addressed to someone else, without creating an order", async () => {
   const pp = fakePayPal(invoice({ primary_recipients: [{ billing_info: { email_address: "x@y.com" } }] }));
-  await assert.rejects(pay(pp), { code: "NOT_YOUR_INVOICE" });
-  assert.equal(orders(pp).length, 0);
+  const stub = stubOrders();
+  await assert.rejects(pay(pp, { stub }), { code: "NOT_YOUR_INVOICE" });
+  assert.equal(orderRequests(stub).length, 0);
 });
 
 test("refuses an invoice that is already paid", async () => {
   for (const status of ["PAID", "MARKED_AS_PAID", "CANCELLED", "DRAFT"]) {
     const pp = fakePayPal(invoice({ status }));
-    await assert.rejects(pay(pp), { code: "NOT_PAYABLE" });
-    assert.equal(orders(pp).length, 0);
+    const stub = stubOrders();
+    await assert.rejects(pay(pp, { stub }), { code: "NOT_PAYABLE" });
+    assert.equal(orderRequests(stub).length, 0);
   }
 });
 
 test("refuses an amount over the agent's spending limit", async () => {
   const pp = fakePayPal(invoice());
-  await assert.rejects(pay(pp, { spendLimit: 100 }), { code: "OVER_LIMIT" });
-  assert.equal(orders(pp).length, 0);
+  const stub = stubOrders();
+  await assert.rejects(pay(pp, { stub, spendLimit: 100 }), { code: "OVER_LIMIT" });
+  assert.equal(orderRequests(stub).length, 0);
 });
 
 test("charges the amount due, not the invoice total", async () => {
   const pp = fakePayPal(invoice({ status: "PARTIALLY_PAID", due_amount: { value: "100.00", currency_code: "USD" } }));
-  await pay(pp);
-  assert.equal(orders(pp)[0].body.purchase_units[0].amount.value, "100.00");
+  const stub = stubOrders();
+  await pay(pp, { stub });
+  assert.equal(JSON.parse(orderRequests(stub)[0].data).purchase_units[0].amount.value, "100.00");
 });
 
 test("pays with the vault token, a fixed request id per invoice, then reconciles and updates dashboards", async () => {
   const pp = fakePayPal(invoice());
   const store = createEventStore();
-  const result = await pay(pp, { eventStore: store });
+  const stub = stubOrders();
+  const result = await pay(pp, { stub, eventStore: store });
 
-  assert.equal(orders(pp).length, 1);
-  const order = orders(pp)[0];
-  assert.equal(order.body.payment_source.paypal.vault_id, "VAULT-1");
-  assert.equal(order.opts.headers["PayPal-Request-Id"], "collectpilot-pay-INV2-AAAA");
+  assert.equal(orderRequests(stub).length, 1);
+  const order = orderRequests(stub)[0];
+  assert.equal(order.method.toUpperCase(), "POST");
+  const wire = JSON.parse(order.data);
+  assert.equal(wire.intent, "CAPTURE");
+  assert.equal(wire.payment_source.paypal.vault_id, "VAULT-1");
+  assert.equal(wire.purchase_units[0].reference_id, "INV2-AAAA");
+  assert.equal(wire.purchase_units[0].invoice_id, "CP-1");
+  assert.equal(order.headers["PayPal-Request-Id"] ?? order.headers["paypal-request-id"], "collectpilot-pay-INV2-AAAA-0-250.00");
+  assert.match(order.headers.Authorization ?? order.headers.authorization, /Bearer tok-1/);
 
   const recorded = pp.calls.find((c) => c.path.endsWith("/payments"));
   assert.match(recorded.body.note, /CAP-1/);
@@ -95,7 +129,59 @@ test("pays with the vault token, a fixed request id per invoice, then reconciles
 });
 
 test("does not record a payment when PayPal did not complete the order", async () => {
-  const pp = fakePayPal(invoice(), { orderStatus: "PAYER_ACTION_REQUIRED" });
-  await assert.rejects(pay(pp), { code: "PAYMENT_NOT_COMPLETED" });
+  const pp = fakePayPal(invoice());
+  await assert.rejects(pay(pp, { stub: stubOrders({ orderStatus: "PAYER_ACTION_REQUIRED" }) }), { code: "PAYMENT_NOT_COMPLETED" });
   assert.equal(pp.calls.filter((c) => c.path.endsWith("/payments")).length, 0);
+});
+
+test("a PayPal error on the order becomes a readable refusal, and nothing is recorded", async () => {
+  const pp = fakePayPal(invoice());
+  const declined = { status: 422, body: { name: "UNPROCESSABLE_ENTITY", message: "The requested action could not be performed." } };
+  await assert.rejects(pay(pp, { stub: stubOrders({ responses: [declined] }) }), { code: "PAYMENT_FAILED", message: /422.*Nothing was charged/ });
+  assert.equal(pp.calls.filter((c) => c.path.endsWith("/payments")).length, 0);
+});
+
+test("never says nothing was charged when the capture may have happened", async () => {
+  const cases = [
+    { status: 503, body: { name: "SERVICE_UNAVAILABLE" } },
+    { status: 422, body: { name: "PREVIOUS_REQUEST_IN_PROGRESS" } },
+    { throw: Object.assign(new Error("timeout of 30000ms exceeded"), { code: "ECONNABORTED" }) },
+  ];
+  for (const c of cases) {
+    const pp = fakePayPal(invoice());
+    const err = await pay(pp, { stub: stubOrders({ responses: [c] }) }).catch((e) => e);
+    assert.equal(err.code, "PAYMENT_UNCONFIRMED", JSON.stringify(c));
+    assert.match(err.message, /may have gone through.*safe/);
+    assert.doesNotMatch(err.message, /Nothing was charged/);
+  }
+});
+
+test("asks PayPal for the full order, so a completed capture is never misread as incomplete", async () => {
+  const stub = stubOrders();
+  await pay(fakePayPal(invoice()), { stub });
+  assert.equal(orderRequests(stub)[0].headers.Prefer, "return=representation");
+});
+
+test("on 403 NOT_AUTHORIZED (token issued before a scope was enabled) revokes the token and retries once", async () => {
+  const stub = stubOrders({ responses: [{ status: 403, body: { name: "NOT_AUTHORIZED", message: "Authorization failed" } }] });
+  const result = await pay(fakePayPal(invoice()), { stub });
+  assert.equal(result.paid, true);
+  assert.equal(stub.auth.revoked, 1);
+  const [first, second] = orderRequests(stub);
+  assert.match(first.headers.Authorization ?? first.headers.authorization, /tok-1/);
+  assert.match(second.headers.Authorization ?? second.headers.authorization, /tok-2/);
+  assert.equal(second.headers["PayPal-Request-Id"], first.headers["PayPal-Request-Id"]);
+});
+
+test("a later partial payment on the same invoice gets its own request id", async () => {
+  const stub = stubOrders();
+  const partly = invoice({ status: "PARTIALLY_PAID", due_amount: { value: "100.00", currency_code: "USD" }, payments: { transactions: [{ payment_id: "EXTR-0" }] } });
+  await pay(fakePayPal(partly), { stub });
+  assert.equal(orderRequests(stub)[0].headers["PayPal-Request-Id"], "collectpilot-pay-INV2-AAAA-1-100.00");
+});
+
+test("the SDK only runs against PayPal's own sandbox or live host", () => {
+  assert.equal(environmentFor("https://api-m.sandbox.paypal.com/"), "Sandbox");
+  assert.equal(environmentFor("https://api-m.paypal.com"), "Production");
+  for (const bad of [undefined, "", "http://localhost:4010", "https://api.sandbox.paypal.com"]) assert.throws(() => environmentFor(bad), /PAYPAL_API_BASE/);
 });
