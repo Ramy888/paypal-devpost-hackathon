@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgStudio } from "ag-studio-react";
+import { studioTheme } from "ag-studio";
+import { OwnerHeader } from "@/components/OwnerHeader";
 import type { AgReportState } from "ag-studio";
 import { applyEvent } from "@/lib/invoices.mjs";
 
@@ -32,26 +33,63 @@ type LiveEvent = { invoice_id: string; status: string; received_at: string };
 
 const FIELDS = [
   { id: "invoice_number", name: "Invoice", format: "textFormat" },
-  { id: "project", name: "Schedule", format: "textFormat" },
   { id: "client", name: "Client", format: "textFormat" },
   { id: "amount", name: "Amount", format: "currencyFormat" },
-  { id: "status", name: "Status", format: "textFormat" },
+  { id: "status_label", name: "Status", format: "textFormat" },
   { id: "due_date", name: "Due", format: "textFormat" },
-  { id: "days_overdue", name: "Days overdue", format: "integerFormat" },
   { id: "risk", name: "Risk", format: "textFormat" },
-  { id: "expected_pay_date", name: "Expected pay date", format: "textFormat" },
+  { id: "expected_pay_date", name: "Expected", format: "textFormat" },
 ] as const;
 
 // The cash panel: four tiles, each the sum of one per-row amount.
 const PANEL = [
   { id: "outstanding", name: "Outstanding", format: "currencyFormat" },
   { id: "overdue_amount", name: "Overdue", format: "currencyFormat" },
-  { id: "expected_7d", name: "Expected in 7 days", format: "currencyFormat" },
+  { id: "expected_7d", name: "Next 7 days", format: "currencyFormat" },
   { id: "at_risk", name: "At risk", format: "currencyFormat" },
 ] as const;
 
+// PayPal's status codes, as people say them.
+const STATUS_LABEL: Record<string, string> = { SENT: "Sent", UNPAID: "Unpaid", PARTIALLY_PAID: "Part paid", PAID: "Paid", MARKED_AS_PAID: "Paid", DRAFT: "Draft", SCHEDULED: "Scheduled", CANCELLED: "Cancelled", REFUNDED: "Refunded", PARTIALLY_REFUNDED: "Part refunded", PAYMENT_PENDING: "Pending" };
+const statusLabel = (r: InvoiceRow) => (r.held ? "On hold" : STATUS_LABEL[r.status] ?? r.status);
+
+// Days overdue stays a data field (the phone list uses it) but not a grid column: Status and Risk say it.
+// Schedule labels show in the phone list and on /schedules; the grid has no room for them.
+const HIDDEN = [
+  { id: "days_overdue", name: "Days overdue", format: "integerFormat" },
+  { id: "project", name: "Schedule", format: "textFormat" },
+] as const;
+
+// Studio in the app's own look: paper canvas, white cards, ink text, the "cleared" green accent.
+const THEME = studioTheme.withParams({
+  accentColor: "#0d6b57",
+  backgroundColor: "#ffffff",
+  foregroundColor: "#12202b",
+  borderColor: "#e1e0d9",
+  fontFamily: "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+  studioCanvasFontFamily: "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+  studioMinWidth: 600,
+  studioWrapperBorder: "none",
+  studioWrapperBackgroundColor: "#f4f3ef",
+  studioWrapperSpacing: 0,
+  studioCanvasBackgroundColor: "#f4f3ef",
+  studioCanvasBorder: "none",
+  studioCanvasShadow: "none",
+  studioCanvasPadding: 0,
+  studioWidgetBorder: "1px solid #e1e0d9",
+  studioWidgetBorderRadius: 12,
+  studioWidgetBackgroundColor: "#ffffff",
+  studioWidgetTitleFontFamily: "var(--font-bricolage), ui-sans-serif, system-ui, sans-serif",
+  studioWidgetTitleTextColor: "#5d6a72",
+} as Parameters<typeof studioTheme.withParams>[0]);
+// The filters panel is for editing dashboards; this page is for reading one.
+const PANELS = { view: {} };
+
 // One stable array: Studio ignores field changes after the first render.
-const SOURCE_FIELDS = [...FIELDS, ...PANEL];
+// Amounts show with their currency sign (the receivables are in one currency, as in the tiles).
+const CURRENCY_FORMAT = { format: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }) };
+const withCurrency = <T extends { format: string }>(f: T) => (f.format === "currencyFormat" ? { ...f, formatOptions: CURRENCY_FORMAT } : f);
+const SOURCE_FIELDS = [...FIELDS, ...PANEL, ...HIDDEN].map(withCurrency);
 const TILE_ROWS = 6;
 
 const INITIAL_STATE: AgReportState = {
@@ -73,7 +111,7 @@ const INITIAL_STATE: AgReportState = {
         invoices: {
           type: "grid",
           dataMapping: { cols: FIELDS.map((f) => ({ id: `invoices.${f.id}` })) },
-          format: { title: { enabled: true, text: "Receivables" } },
+          format: { title: { enabled: true, text: "Invoices" }, style: { columnAutoSize: false, columnWidth: 100 } },
         },
       },
       widgetLayout: {
@@ -161,41 +199,48 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
   // api.setProperty("data"), and an async source with api.reload()). Until that is fixed we
   // remount Studio on each change, carrying the user's dashboard state across. The remount
   // visibly blanks the grid ("Loading…") for a moment; see the plan's spike 2 notes.
-  const data = useMemo(() => ({ sources: [{ id: "invoices", name: "Invoices", data: rows, fields: SOURCE_FIELDS }] }), [rows]);
+  const data = useMemo(
+    () => ({ sources: [{ id: "invoices", name: "Invoices", data: rows.map((r) => ({ ...r, status_label: statusLabel(r) })), fields: SOURCE_FIELDS }] }),
+    [rows],
+  );
 
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-200 px-4 py-3 text-sm sm:px-6">
-        <span className="font-semibold">CollectPilot</span>
-        <nav className="flex gap-4 font-medium text-emerald-700">
-          <Link href="/invoices/new">New invoice</Link>
-          <Link href="/reminders">Reminders</Link>
-          <Link href="/schedules">Schedules</Link>
-          <Link href="/retainers">Retainers</Link>
-          <Link href="/digest">Digest</Link>
-        </nav>
-        <span className="ms-auto flex min-w-0 items-center gap-4 text-zinc-500">
-          {lastUpdate && (
-            <span data-testid="last-update" className="hidden truncate sm:inline">
-              {lastUpdate.invoice} → {lastUpdate.status} ({lastUpdate.lagMs} ms after webhook)
-            </span>
-          )}
-          <span className={connected ? "text-emerald-600" : "text-zinc-400"}>{connected ? "● Live" : "○ Offline"}</span>
-        </span>
-      </header>
-      <div className="min-h-0 flex-1 overflow-auto">
-        {narrow ? (
-          <PhoneList rows={rows} />
-        ) : (
-          <AgStudio
-            key={version}
-            data={data}
-            initialState={studioState}
-            mode="view"
-            onStateUpdated={(e) => (stateRef.current = e.state)}
-          />
+    <div className="min-h-full bg-paper">
+      <OwnerHeader current="/" />
+      <main className="mx-auto grid max-w-3xl gap-5 px-5 pb-16">
+        <section className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pt-2">
+          <div className="grid gap-2">
+            <h1 className="font-display text-4xl font-semibold tracking-tight">Receivables</h1>
+            <p className="text-muted">Every PayPal invoice you sent, updated the moment PayPal tells us it moved.</p>
+          </div>
+          <p className="flex items-center gap-2 text-sm">
+            <span className={`h-2 w-2 rounded-full ${connected ? "bg-cleared" : "bg-line"}`} aria-hidden />
+            <span className={connected ? "font-semibold text-cleared" : "text-muted"}>{connected ? "Live" : "Offline"}</span>
+          </p>
+        </section>
+        {lastUpdate && (
+          <p data-testid="last-update" className="truncate rounded-lg border border-cleared/30 bg-cleared-soft px-4 py-2 text-sm text-cleared">
+            {lastUpdate.invoice} is now {lastUpdate.status.toLowerCase().replaceAll("_", " ")} · {lastUpdate.lagMs} ms after PayPal&apos;s webhook
+          </p>
         )}
-      </div>
+        {narrow ? (
+          <div className="overflow-hidden rounded-xl border border-line bg-card">
+            <PhoneList rows={rows} />
+          </div>
+        ) : (
+          <div className="h-[calc(100dvh-13rem)] min-h-[34rem]">
+            <AgStudio
+              key={version}
+              data={data}
+              initialState={studioState}
+              mode="view"
+              theme={THEME}
+              panels={PANELS}
+              onStateUpdated={(e) => (stateRef.current = e.state)}
+            />
+          </div>
+        )}
+      </main>
     </div>
   );
 }
