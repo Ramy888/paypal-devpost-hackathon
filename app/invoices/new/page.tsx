@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { isOwner } from "@/lib/server/owner";
 import { Composer } from "@/components/invoices/Composer";
 import { now } from "@/lib/server/clock.mjs";
+import { headers } from "next/headers";
+import { countryFromRequest, currencyForCountry } from "@/lib/currency.mjs";
 
 export const metadata: Metadata = { title: "New invoice · CollectPilot" };
 
@@ -19,7 +21,11 @@ export default async function NewInvoicePage() {
             Say or type who to bill and for what, in English or Arabic. You check the draft before anything is sent.
           </p>
         </div>
-        <Composer freelancerName={process.env.FREELANCER_NAME ?? "Your studio"} todayIso={(await now()).toISOString().slice(0, 10)} />
+        <Composer
+          freelancerName={process.env.FREELANCER_NAME ?? "Your studio"}
+          todayIso={(await now()).toISOString().slice(0, 10)}
+          defaultCurrency={currencyForCountry(countryFromRequest(await headers()))}
+        />
       </main>
     </div>
   );

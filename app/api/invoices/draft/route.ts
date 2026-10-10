@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { draftInvoice, DEFAULT_MODEL } from "@/lib/draftInvoice.mjs";
 import { isOwner } from "@/lib/server/owner";
 import { allow } from "@/lib/server/rateLimit";
+import { countryFromRequest, currencyForCountry } from "@/lib/currency.mjs";
 
 // Freelancer only. Each call spends the Anthropic API key, so it is capped.
 const anthropic = new Anthropic();
@@ -13,7 +14,8 @@ export async function POST(req: Request) {
   }
   const { text } = await req.json().catch(() => ({ text: "" }));
   try {
-    const draft = await draftInvoice({ anthropic, text: String(text ?? ""), model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL });
+    const defaultCurrency = currencyForCountry(countryFromRequest(req.headers));
+    const draft = await draftInvoice({ anthropic, text: String(text ?? ""), model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL, defaultCurrency });
     return Response.json(draft);
   } catch (err) {
     if (err instanceof Anthropic.APIError) {
