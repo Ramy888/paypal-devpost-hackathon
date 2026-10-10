@@ -187,6 +187,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
     source.onerror = () => setConnected(false);
     source.onmessage = (msg) => {
       const ev: LiveEvent = JSON.parse(msg.data);
+      if (!ev.invoice_id) return; // e.g. a retainer change: nothing to redraw here
       setRows((prev) => applyEvent(prev, ev, new Date(nowIso)));
       setStudioState(stateRef.current);
       setVersion((v) => v + 1);

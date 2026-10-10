@@ -72,3 +72,18 @@ test("unsubscribed listeners stop receiving events", () => {
   store.add({ id: "WH-2" });
   assert.deepEqual(seen, []);
 });
+
+test("a retainer change reaches live pages as a non-invoice event, so dashboards ignore it", async () => {
+  const { createEventStore, notifyRetainerChange } = await import("../lib/events.mjs");
+  const { applyEvent } = await import("../lib/invoices.mjs");
+  const store = createEventStore();
+  const seen = [];
+  store.subscribe((e) => seen.push(e));
+  notifyRetainerChange(store);
+  notifyRetainerChange(store);
+  assert.equal(seen.length, 2, "each change is its own event");
+  assert.equal(seen[0].event_type, "APP.RETAINER.UPDATED");
+  assert.equal(seen[0].invoice_id, null);
+  const rows = [{ id: "INV-1", status: "SENT" }];
+  assert.equal(applyEvent(rows, seen[0]), rows);
+});

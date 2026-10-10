@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { CopyField } from "@/components/connect/CopyField";
 import { OwnerHeader } from "@/components/OwnerHeader";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { findRetainerCandidates } from "@/lib/retainers.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 import { paypal } from "@/lib/server/paypal";
@@ -12,6 +13,8 @@ import Link from "next/link";
 import { createRetainerOffer, endRetainerAction } from "./actions";
 
 export const metadata: Metadata = { title: "Retainers · CollectPilot" };
+// A client approving an offer (or PayPal activating/billing it) refreshes this page.
+const RETAINER_EVENTS = ["APP.RETAINER"];
 
 type Retainer = {
   id: string;
@@ -70,6 +73,7 @@ export default async function RetainersPage({ searchParams }: PageProps<"/retain
   return (
     <div className="min-h-full bg-paper">
       <OwnerHeader current="/retainers" />
+      <LiveRefresh prefixes={RETAINER_EVENTS} />
       <main className="mx-auto grid max-w-3xl gap-8 px-5 pb-16">
         <section className="grid gap-2 pt-2">
           <h1 className="font-display text-4xl font-semibold tracking-tight">Retainers</h1>

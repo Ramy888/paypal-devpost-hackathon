@@ -1,5 +1,5 @@
 import { handleWebhook, MAX_BODY } from "@/lib/webhook.mjs";
-import { eventStore } from "@/lib/events.mjs";
+import { eventStore, notifyRetainerChange } from "@/lib/events.mjs";
 import { paypal } from "@/lib/server/paypal";
 import { applyRetainerWebhook } from "@/lib/server/retainers";
 import { applyProWebhook } from "@/lib/server/pro";
@@ -15,7 +15,10 @@ export async function POST(req: Request) {
     webhookId: process.env.PAYPAL_WEBHOOK_ID ?? "",
     paypal: paypal(),
   });
-  if (result.event && ((await applyRetainerWebhook(result.event)) || (await applyProWebhook(result.event)))) {
+  if (result.event && (await applyRetainerWebhook(result.event))) {
+    notifyRetainerChange();
+    console.log(JSON.stringify({ msg: "subscription webhook", id: result.event.id, event_type: result.event.event_type }));
+  } else if (result.event && (await applyProWebhook(result.event))) {
     console.log(JSON.stringify({ msg: "subscription webhook", id: result.event.id, event_type: result.event.event_type }));
   } else if (result.summary) {
     const isNew = eventStore.add(result.summary);
