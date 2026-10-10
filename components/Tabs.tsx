@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-// Icon tabs driven by a ?tab= link, so they work without client JavaScript and each tab has a URL.
-// The active tab shows its name; the others show only their icon (named for screen readers and on hover).
+// Icon + name tabs driven by a ?tab= link, so they work without client JavaScript and each tab has a URL.
+// Every tab shows its name; the active one is filled.
 
 const ICONS = {
   agent: "M9 3h6M12 3v3m-6 3h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Zm3 4h.01M15 13h.01M9.5 16h5",
@@ -35,15 +35,13 @@ export function Tabs({ tabs, active, basePath, label }: { tabs: Tab[]; active: s
             key={t.id}
             href={`${basePath}?tab=${t.id}`}
             aria-current={on ? "page" : undefined}
-            aria-label={on ? undefined : t.label}
-            title={t.label}
             scroll={false}
             className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${
               on ? "bg-ink text-white" : "text-muted hover:bg-line hover:text-ink"
             }`}
           >
             <Icon name={t.icon} />
-            {on && <span>{t.label}</span>}
+            <span>{t.label}</span>
             {typeof t.count === "number" && t.count > 0 && (
               <span className={`rounded-full px-1.5 text-xs tabular-nums ${on ? "bg-white/20" : "bg-line text-ink"}`}>{t.count}</span>
             )}
