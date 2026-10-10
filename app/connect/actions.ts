@@ -26,3 +26,8 @@ export async function revoke() {
   jar.delete({ name: COOKIE.payer, path: "/connect" });
   redirect("/connect/revoked");
 }
+
+// "Check connection": re-reads the connection; the page says whether the assistant has checked in.
+export async function checkConnection() {
+  redirect("/connect/done?checked=1");
+}
