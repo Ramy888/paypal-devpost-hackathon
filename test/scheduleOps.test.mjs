@@ -372,3 +372,7 @@ test("approval and an agent pass running at the same time create one chunk invoi
   await Promise.all([approving, tick]);
   assert.equal(paypal.invoices.size, 1);
 });
+
+test("a schedule refuses a client email PayPal would reject (trailing dot)", async () => {
+  await assert.rejects(createSchedule({ store: memStore(), input: input("chunks", { clientEmail: "c@acme.com." }), publicId: "p", now: NOW }), /client's email/);
+});

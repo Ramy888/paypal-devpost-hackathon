@@ -11,7 +11,7 @@ import { proposeDate } from "./actions";
 
 export const metadata: Metadata = { title: "Schedules · CollectPilot" };
 
-type Schedule = { id: string; publicId: string; mode: "milestones" | "chunks"; title: string; clientEmail: string; clientName: string; currency: string; total: number; status: string; autopay: boolean };
+type Schedule = { id: string; publicId: string; mode: "milestones" | "chunks"; title: string; clientEmail: string; clientName: string; currency: string; total: number; status: string; autopay: boolean; invoiceId: string | null };
 type Part = { id: string; scheduleId: string; seq: number; name: string; amount: number; dueDate: string; status: string; holdNote: string; proposedDueDate: string | null };
 type Charge = { partId: string; outcome: string; detail: string };
 
@@ -84,6 +84,11 @@ export default async function SchedulesPage({ searchParams }: PageProps<"/schedu
                 <p className="min-w-0 truncate text-xs text-muted">
                   Client link: <code>{link}</code>
                 </p>
+                {s.mode === "chunks" && s.status === "approved" && !s.invoiceId && (
+                  <p role="alert" className="mt-1 rounded-md bg-pending-soft px-3 py-2 text-xs text-pending">
+                    PayPal hasn&apos;t accepted this schedule&apos;s invoice yet, so nothing can be charged. CollectPilot retries every 10 minutes; if this stays, check the client&apos;s email ({s.clientEmail}).
+                  </p>
+                )}
               </header>
               <ol className="grid gap-2">
                 {own.map((p) => {
