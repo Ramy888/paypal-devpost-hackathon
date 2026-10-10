@@ -38,8 +38,6 @@ const DONE: Record<string, string> = {
   confirmed: "Confirmed. That part is due on its date again.",
   still: "Sent. It stays on hold until it's fixed.",
   replied: "Reply sent.",
-  "part-on": "Auto-pay is on for that part.",
-  "part-off": "Auto-pay is off for that part. Pay it from its PayPal invoice.",
   released: "Hold lifted. That part is due on its original date again.",
   date: "New date approved.",
 };
@@ -83,10 +81,6 @@ export default async function SchedulePage({ params, searchParams }: PageProps<"
 
   return (
     <div className="grid gap-8">
-      <StepBar
-        label="Payment schedule"
-        steps={scheduleSteps({ approved: schedule.status === "approved", autopay: schedule.autopay, kind, paid: parts.filter((p) => p.status === "paid").length, total: parts.length, held: parts.filter((p) => p.status === "on_hold").length })}
-      />
       <section className="grid gap-3 pt-4">
         <p className="text-sm font-medium text-cleared">
           {schedule.status === "proposed" ? `A payment schedule from ${freelancer}` : `Your payment schedule with ${freelancer}`}
@@ -100,6 +94,10 @@ export default async function SchedulePage({ params, searchParams }: PageProps<"
           {schedule.status === "approved" && ` ${money(paid, schedule.currency)} paid so far.`}
         </p>
       </section>
+      <StepBar
+        label="Payment schedule"
+        steps={scheduleSteps({ approved: schedule.status === "approved", autopay: schedule.autopay, kind, paid: parts.filter((p) => p.status === "paid").length, total: parts.length, held: parts.filter((p) => p.status === "on_hold").length })}
+      />
 
       {typeof done === "string" && DONE[done] && <p className="rounded-lg border border-cleared/30 bg-cleared-soft px-4 py-3 text-sm text-cleared">{DONE[done]}</p>}
       {typeof error === "string" && (
@@ -153,12 +151,14 @@ export default async function SchedulePage({ params, searchParams }: PageProps<"
                         {!open ? (
                           <span className="text-xs text-muted">—</span>
                         ) : schedule.autopay ? (
-                          <form action={setPartAutopay.bind(null, publicId, p.id, !p.autopay)}>
+                          <form action={setPartAutopay.bind(null, publicId, p.id, !p.autopay)} className="grid justify-items-center gap-0.5">
+                            <span className={`text-[11px] font-semibold uppercase tracking-wide ${p.autopay ? "text-cleared" : "text-muted"}`}>{p.autopay ? "On" : "Off"}</span>
                             <SwitchButton on={p.autopay} label={`Auto-pay for ${p.name}`} />
                           </form>
                         ) : (
-                          <form action="/pay/start" method="post">
+                          <form action="/pay/start" method="post" className="grid justify-items-center gap-0.5">
                             <input type="hidden" name="s" value={publicId} />
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">Off</span>
                             <SwitchButton on={false} label={`Turn on auto-pay (approve on PayPal) for ${p.name}`} />
                           </form>
                         )}
