@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PAYPAL_CURRENCIES, currencyForCountry, countryFromRequest } from "../lib/currency.mjs";
-import { validateInvoiceForm, splitEvenly } from "../lib/invoiceForm.mjs";
+import { validateInvoiceForm, splitEvenly, capPartAmount } from "../lib/invoiceForm.mjs";
 import { normalizeDraft } from "../lib/draftInvoice.mjs";
 
 test("currency follows the visitor's country when PayPal can invoice in it, else USD", () => {
@@ -54,7 +54,7 @@ test("milestones: each needs a name, amount and future date, and together they m
   assert.match(errors["parts.1.name"], /name/);
   assert.match(errors["parts.1.amount"], /more than 0/);
   assert.match(errors["parts.1.due_date"], /past/);
-  assert.match(errors.parts_total, /\$100.00 of \$300.00/);
+  assert.equal(errors.parts_total, "$200.00 left to assign to milestones.");
   const ok = validateInvoiceForm({ draft: good, payMode: "milestones", parts: [{ name: "A", amount: 100, due_date: "2026-10-20" }, { name: "B", amount: 200, due_date: "2026-11-20" }], todayIso: "2026-10-10" });
   assert.equal(ok.valid, true);
 });
@@ -62,4 +62,18 @@ test("milestones: each needs a name, amount and future date, and together they m
 test("splitEvenly re-spreads the total over the milestones, keeping their names and dates", () => {
   const parts = [{ name: "Design", amount: 300, due_date: "2026-10-20" }, { name: "Build", amount: 0, due_date: "2026-11-20" }, { name: "Launch", amount: 0, due_date: "2026-12-20" }];
   assert.deepEqual(splitEvenly(parts, 1000).map((p) => [p.name, p.amount, p.due_date]), [["Design", 333.33, "2026-10-20"], ["Build", 333.33, "2026-11-20"], ["Launch", 333.34, "2026-12-20"]]);
+});
+
+test("a milestone amount is capped at what the other milestones leave of the total", () => {
+  const parts = [{ amount: 5 }, { amount: 3 }, { amount: 5 }];
+  assert.equal(capPartAmount(parts, 1, 9, 15), 5, "15 - 5 - 5 leaves 5");
+  assert.equal(capPartAmount(parts, 1, 4, 15), 4);
+  assert.equal(capPartAmount(parts, 1, -2, 15), 0);
+  assert.equal(capPartAmount([{ amount: 0.1 }, { amount: 0.2 }], 1, 0.3, 0.3), 0.2, "no float drift");
+});
+
+test("if the item total drops below the milestones, the message says how much they are over", () => {
+  const draft = { client_email: "c@acme.com", currency: "USD", items: [{ name: "Edit", quantity: 1, unit_amount: 10 }], due_in_days: 14 };
+  const parts = [{ name: "A", amount: 8, due_date: "2026-10-20" }, { name: "B", amount: 7, due_date: "2026-11-20" }];
+  assert.equal(validateInvoiceForm({ draft, payMode: "milestones", parts, todayIso: "2026-10-10" }).errors.parts_total, "Milestones are $5.00 over the invoice total.");
 });

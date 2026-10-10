@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { PAYPAL_CURRENCIES } from "@/lib/currency.mjs";
-import { validateInvoiceForm, splitEvenly, formTotal } from "@/lib/invoiceForm.mjs";
+import { validateInvoiceForm, splitEvenly, formTotal, capPartAmount } from "@/lib/invoiceForm.mjs";
 
 type Item = { name: string; quantity: number; unit_amount: number };
 type Draft = {
@@ -492,11 +492,13 @@ export function Composer({ freelancerName, todayIso, defaultCurrency }: { freela
                       <input
                         type="number"
                         min={0}
+                        max={capPartAmount(parts, i, total, total)}
                         step="0.01"
                         className={`${field} ${border(`parts.${i}.amount`)} tabular-nums`}
                         value={p.amount}
                         onChange={(e) => {
-                          updatePart(i, { amount: Number(e.target.value) });
+                          // Never more than the other milestones leave of the invoice total.
+                          updatePart(i, { amount: capPartAmount(parts, i, Number(e.target.value), total) });
                           touch(`parts.${i}.amount`);
                         }}
                         onBlur={() => touch(`parts.${i}.amount`)}
@@ -531,7 +533,7 @@ export function Composer({ freelancerName, todayIso, defaultCurrency }: { freela
                     Split evenly
                   </button>
                   <span className={`ms-auto tabular-nums ${check.errors.parts_total ? "font-semibold text-pending" : "text-muted"}`}>
-                    {check.errors.parts_total ?? `${money(total, draft.currency)} in ${parts.length} milestones`}
+                    {check.errors.parts_total ?? `${money(total, draft.currency)} in ${parts.length} milestones · fully assigned`}
                   </span>
                 </div>
               </div>
