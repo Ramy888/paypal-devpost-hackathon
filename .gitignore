@@ -19,3 +19,7 @@ next-env.d.ts
 
 # Local MCP client config holding an agent key
 .mcp-client.json
+
+# Private planning/assessment notes (repo goes public)
+Claude_Code_AI_Invoice_Review_Assessment.md
+docs/ai-invoice-review-assessment.md

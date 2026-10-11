@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { PAYPAL_CURRENCIES } from "@/lib/currency.mjs";
 import { validateInvoiceForm, splitEvenly, formTotal, capPartAmount } from "@/lib/invoiceForm.mjs";
+import { ReviewPanel } from "./ReviewPanel";
 
 type Item = { name: string; quantity: number; unit_amount: number };
 type Draft = {
@@ -64,7 +65,17 @@ function FieldError({ message }: { message?: string }) {
   );
 }
 
-export function Composer({ freelancerName, todayIso, defaultCurrency }: { freelancerName: string; todayIso: string; defaultCurrency: string }) {
+export function Composer({
+  freelancerName,
+  todayIso,
+  defaultCurrency,
+  reviewEnabled = false,
+}: {
+  freelancerName: string;
+  todayIso: string;
+  defaultCurrency: string;
+  reviewEnabled?: boolean;
+}) {
   const empty = (): Draft => ({ client_name: "", client_email: "", currency: defaultCurrency, items: [{ name: "", quantity: 1, unit_amount: 0 }], due_in_days: 14, note: "", language: "en", missing: [] });
   const [text, setText] = useState("");
   const [lang, setLang] = useState<"en-US" | "ar-EG">("en-US");
@@ -449,6 +460,15 @@ export function Composer({ freelancerName, todayIso, defaultCurrency }: { freela
               + Add line
             </button>
           </div>
+
+          {reviewEnabled && (
+            <ReviewPanel
+              currency={draft.currency}
+              items={draft.items}
+              // A blank first line is replaced rather than left empty above the suggestion.
+              onAddItem={(item) => update({ items: [...draft.items.filter((it) => it.name.trim() || it.unit_amount), item] })}
+            />
+          )}
 
           <fieldset className="grid gap-3">
             <legend className="mb-2 text-sm text-muted">How will the client pay?</legend>
