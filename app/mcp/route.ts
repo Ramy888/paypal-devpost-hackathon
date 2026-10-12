@@ -8,6 +8,7 @@ import { now } from "@/lib/server/clock.mjs";
 import { payerForKey } from "@/lib/connect.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
 import { schedulesOwed } from "@/lib/scheduleOps.mjs";
+import { isHeldInvoice } from "@/lib/server/schedules";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ function buildServer(payer: Payer) {
     "pay_invoice",
     {
       title: "Pay an invoice",
-      description: `Pays one invoice with the PayPal account your owner approved for agent payments: everything due, or one part (amount) of an invoice that is paid in parts. Refuses invoices that are not addressed to your owner, already paid, or over the ${spendLimit} spending limit per payment.`,
+      description: `Pays one invoice with the PayPal account your owner approved for agent payments: everything due, or one part (amount) of an invoice that is paid in parts. Refuses invoices that are not addressed to your owner, already paid, a milestone your owner marked \"not done yet\", or over the ${spendLimit} spending limit per payment.`,
       inputSchema: {
         invoice_id: z.string().describe("invoice_id from what_do_i_owe, e.g. INV2-XXXX-XXXX-XXXX-XXXX"),
         amount: z.number().positive().optional().describe("Pay only this much (for an invoice paid in parts). Leave out to pay everything due."),
@@ -58,7 +59,7 @@ function buildServer(payer: Payer) {
     },
     async ({ invoice_id, amount }) => {
       try {
-        const result = await payInvoice({ paypal: paypal(), orders: paypalOrders(), payer, invoiceId: invoice_id, spendLimit, amount, eventStore });
+        const result = await payInvoice({ paypal: paypal(), orders: paypalOrders(), payer, invoiceId: invoice_id, spendLimit, amount, isHeld: isHeldInvoice, eventStore });
         await pgStore().recordPayment(payer.id, Number(result.amount));
         return text(result);
       } catch (err) {

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { approveSchedule, holdPartOp, releaseHoldOp, approveDateOp, confirmFixedOp, stillNotDoneOp, replyOp, setPartAutopayOp } from "@/lib/scheduleOps.mjs";
 import { ScheduleError } from "@/lib/schedules.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
+import { eventStore } from "@/lib/events.mjs";
 import { paypal } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
 import { allow } from "@/lib/server/rateLimit";
@@ -63,21 +64,21 @@ export async function holdPart(publicId: string, partId: string, form: FormData)
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, async () => holdPartOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now() }), "held");
+  await run(publicId, async () => holdPartOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now(), eventStore }), "held");
 }
 
 export async function releaseHold(publicId: string, partId: string) {
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, async () => releaseHoldOp({ store: pgStore(), part, now: await now() }), "released");
+  await run(publicId, async () => releaseHoldOp({ store: pgStore(), part, now: await now(), eventStore }), "released");
 }
 
 export async function approveNewDate(publicId: string, partId: string) {
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, async () => approveDateOp({ store: pgStore(), paypal: paypal(), part, now: await now() }), "date");
+  await run(publicId, async () => approveDateOp({ store: pgStore(), paypal: paypal(), part, now: await now(), eventStore }), "date");
 }
 
 export async function turnOffAutopay(publicId: string) {
@@ -89,14 +90,14 @@ export async function confirmFixed(publicId: string, partId: string) {
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, async () => confirmFixedOp({ store: pgStore(), part, now: await now() }), "confirmed");
+  await run(publicId, async () => confirmFixedOp({ store: pgStore(), part, now: await now(), eventStore }), "confirmed");
 }
 
 export async function stillNotDone(publicId: string, partId: string, form: FormData) {
   const found = await load(publicId);
   const part = partOf(found, partId);
   if (!part) redirect(`/pay/${publicId}`);
-  await run(publicId, async () => stillNotDoneOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now() }), "still");
+  await run(publicId, async () => stillNotDoneOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now(), eventStore }), "still");
 }
 
 export async function clientReply(publicId: string, partId: string, form: FormData) {

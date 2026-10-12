@@ -439,3 +439,35 @@ test("schedulesOwed lists the payer's schedules with each milestone's id, date, 
     },
   ]);
 });
+
+test("hold changes reach live dashboards: the invoice row is marked held, then cleared", async () => {
+  const { store, paypal, schedule, parts } = await setup("milestones");
+  await sendDueMilestones({ store, paypal, schedule, parts: await parts(), today: NOW, ...CTX });
+  const events = createEventStore();
+  const seen = [];
+  events.subscribe((e) => seen.push(e));
+  const [p1] = await parts();
+  const held = await holdPartOp({ store, part: p1, note: "Logo colours are off", now: NOW, eventStore: events });
+  await releaseHoldOp({ store, part: held, now: NOW, eventStore: events });
+  assert.deepEqual(
+    seen.map((e) => [e.event_type, e.invoice_id, e.held, e.change]),
+    [
+      ["APP.SCHEDULE.UPDATED", p1.invoiceId, true, "hold"],
+      ["APP.SCHEDULE.UPDATED", p1.invoiceId, false, "released"],
+    ],
+  );
+  assert.match(seen[0].project, /1\/\d/);
+});
+
+test("a hold on a milestone not invoiced yet changes nothing on the dashboard, and never fails the hold", async () => {
+  const { store, parts } = await setup("milestones");
+  const events = createEventStore();
+  const seen = [];
+  events.subscribe((e) => seen.push(e));
+  const held = await holdPartOp({ store, part: (await parts())[1], now: NOW, eventStore: events });
+  assert.equal(held.status, "on_hold");
+  assert.deepEqual(seen, []);
+  const broken = { ...store, findSchedule: async () => { throw new Error("db down"); } };
+  const again = await holdPartOp({ store: broken, part: (await parts())[0], now: NOW, eventStore: events });
+  assert.equal(again.status, "on_hold");
+});

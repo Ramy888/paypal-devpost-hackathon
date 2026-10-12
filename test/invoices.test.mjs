@@ -112,3 +112,13 @@ test("a partly paid invoice counts only what is still due", () => {
   assert.equal(row.outstanding, 200);
   assert.equal(row.overdue_amount, 200);
 });
+
+test("a schedule hold event marks the row held and back, without touching its status; unknown rows are ignored", () => {
+  const rows = [toRow(INVOICE, NOW)];
+  const held = applyEvent(rows, { event_type: "APP.SCHEDULE.UPDATED", invoice_id: "INV2-AAAA", held: true }, NOW);
+  assert.equal(held[0].held, true);
+  assert.equal(held[0].status, rows[0].status);
+  const cleared = applyEvent(held, { event_type: "APP.SCHEDULE.UPDATED", invoice_id: "INV2-AAAA", held: false }, NOW);
+  assert.equal(cleared[0].held, false);
+  assert.equal(applyEvent(rows, { event_type: "APP.SCHEDULE.UPDATED", invoice_id: "INV2-NEW", held: true }, NOW), rows);
+});

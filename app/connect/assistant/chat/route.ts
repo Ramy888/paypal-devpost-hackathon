@@ -6,6 +6,8 @@ import { paypal } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
 import { allow } from "@/lib/server/rateLimit";
 import { clientPayer } from "@/lib/server/clientPayer";
+import { isHeldInvoice } from "@/lib/server/schedules";
+import { eventStore } from "@/lib/events.mjs";
 
 const anthropic = new Anthropic();
 const MAX_HISTORY_BYTES = 300_000;
@@ -35,7 +37,7 @@ export async function POST(req: Request) {
   const store = pgStore();
   // Using the hosted assistant counts as the client's assistant checking in (setup step 3).
   if (!payer.firstUsedAt) await store.markUsed(payer.id);
-  const ctx = { paypal: paypal(), store, payer, now: await now(), freelancer: process.env.FREELANCER_NAME ?? "your freelancer" };
+  const ctx = { paypal: paypal(), store, payer, now: await now(), freelancer: process.env.FREELANCER_NAME ?? "your freelancer", isHeld: isHeldInvoice, eventStore };
 
   // One JSON object per line: {"step"} while it works, then {"done"} or {"error"}. The chat shows
   // each step, since a turn takes two or more Claude calls.

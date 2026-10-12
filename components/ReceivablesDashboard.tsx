@@ -6,7 +6,7 @@ import { studioTheme, createAiHarness, AgStudioModuleRegistry, AgStudioAiModule 
 import { claudeAdapter, pageHistory } from "@/components/studioAdapter";
 import { OwnerHeader } from "@/components/OwnerHeader";
 import type { AgReportState } from "ag-studio";
-import { applyEvent } from "@/lib/invoices.mjs";
+import { applyEvent, SCHEDULE_EVENT } from "@/lib/invoices.mjs";
 
 export type InvoiceRow = {
   id: string;
@@ -30,7 +30,22 @@ export type InvoiceRow = {
   at_risk: number;
 };
 
-type LiveEvent = { invoice_id: string; status: string; received_at: string };
+type LiveEvent = { invoice_id: string; status?: string; received_at: string; event_type?: string; held?: boolean; change?: string; part_name?: string; project?: string };
+
+// What the client did on their schedule page, as the banner says it.
+const HOLD_WORDS: Record<string, string> = {
+  hold: "marked “Not done yet”",
+  still_not_done: "says it's still not done",
+  released: "lifted the hold",
+  confirmed: "confirmed your fix; the hold is lifted",
+  date_approved: "approved the new date",
+  date_proposed: "was sent your new date",
+  fixed: "was told it's fixed",
+};
+const bannerText = (ev: LiveEvent, lagMs: number) =>
+  ev.event_type === SCHEDULE_EVENT
+    ? `${ev.project ? `${ev.project} · ` : ""}${ev.part_name ?? "A milestone"}: client ${HOLD_WORDS[ev.change ?? ""] ?? "updated it"}`
+    : `${ev.invoice_id} is now ${(ev.status ?? "").toLowerCase().replaceAll("_", " ")} · ${lagMs} ms after PayPal's webhook`;
 
 const FIELDS = [
   { id: "invoice_number", name: "Invoice", format: "textFormat" },
@@ -192,7 +207,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
   const [studioState, setStudioState] = useState<AgReportState>(INITIAL_STATE);
   const stateRef = useRef<AgReportState>(INITIAL_STATE);
   const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
-  const [lastUpdate, setLastUpdate] = useState<{ invoice: string; status: string; lagMs: number } | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<{ text: string; hold: boolean } | null>(null);
 
   useEffect(() => {
     const source = new EventSource("/api/stream");
@@ -204,7 +219,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
       setRows((prev) => applyEvent(prev, ev, new Date(nowIso)));
       setStudioState(stateRef.current);
       setVersion((v) => v + 1);
-      setLastUpdate({ invoice: ev.invoice_id, status: ev.status, lagMs: Date.now() - Date.parse(ev.received_at) });
+      setLastUpdate({ text: bannerText(ev, Date.now() - Date.parse(ev.received_at)), hold: ev.event_type === SCHEDULE_EVENT && Boolean(ev.held) });
     };
     return () => source.close();
   }, [nowIso]);
@@ -233,8 +248,11 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
           </p>
         </section>
         {lastUpdate && (
-          <p data-testid="last-update" className="truncate rounded-lg border border-cleared/30 bg-cleared-soft px-4 py-2 text-sm text-cleared">
-            {lastUpdate.invoice} is now {lastUpdate.status.toLowerCase().replaceAll("_", " ")} · {lastUpdate.lagMs} ms after PayPal&apos;s webhook
+          <p
+            data-testid="last-update"
+            className={`truncate rounded-lg border px-4 py-2 text-sm ${lastUpdate.hold ? "border-pending/30 bg-pending-soft text-pending" : "border-cleared/30 bg-cleared-soft text-cleared"}`}
+          >
+            {lastUpdate.text}
           </p>
         )}
         {narrow ? (

@@ -72,3 +72,8 @@ export async function loadOverrides() {
     return new Map();
   }
 }
+
+/** True when the client put this invoice's milestone "Not done yet" (agents must not pay it). */
+export async function isHeldInvoice(invoiceId: string) {
+  return (await loadOverrides()).get(invoiceId)?.held === true;
+}

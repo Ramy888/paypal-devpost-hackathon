@@ -244,3 +244,22 @@ test("the agent's limit covers everything it pays on one invoice, so part paymen
   const result = await pay(fakePayPal(paidBefore), { amount: 900, spendLimit: 2000 });
   assert.equal(result.paid, true);
 });
+
+test("a milestone the client put on hold is refused before anything is charged", async () => {
+  const pp = fakePayPal(invoice());
+  const stub = stubOrders();
+  const asked = [];
+  const isHeld = async (id) => (asked.push(id), true);
+  await assert.rejects(pay(pp, { stub, isHeld }), { code: "ON_HOLD" });
+  assert.deepEqual(asked, ["INV2-AAAA"]);
+  assert.equal(orderRequests(stub).length, 0, "no order created");
+  // Without a hold (or without the check) the same payment goes through.
+  await pay(pp, { isHeld: async () => false });
+});
+
+test("the hold check runs only for the payer's own invoice", async () => {
+  const theirs = invoice({ primary_recipients: [{ billing_info: { email_address: "someone@else.com" } }] });
+  let asked = false;
+  await assert.rejects(pay(fakePayPal(theirs), { isHeld: async () => ((asked = true), true) }), { code: "NOT_YOUR_INVOICE" });
+  assert.equal(asked, false);
+});

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { proposeDateOp, markFixedOp, replyOp } from "@/lib/scheduleOps.mjs";
 import { ScheduleError } from "@/lib/schedules.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
+import { eventStore } from "@/lib/events.mjs";
 import { now } from "@/lib/server/clock.mjs";
 import { isOwner } from "@/lib/server/owner";
 
@@ -15,7 +16,7 @@ export async function proposeDate(partId: string, form: FormData) {
   const part = await store.findPart(partId);
   if (!part) redirect("/schedules");
   try {
-    await proposeDateOp({ store, part, dueDate: String(form.get("dueDate") ?? ""), now: await now() });
+    await proposeDateOp({ store, part, dueDate: String(form.get("dueDate") ?? ""), now: await now(), eventStore });
   } catch (err) {
     if (!(err instanceof ScheduleError)) throw err;
     redirect(`/schedules?error=${encodeURIComponent(err.message)}`);
@@ -45,7 +46,7 @@ async function run(fn: () => Promise<unknown>, done: string) {
 // Freelancer: what the client said was missing is fixed. The client confirms before it's due again.
 export async function markFixed(partId: string, form: FormData) {
   const part = await heldPart(partId);
-  await run(async () => markFixedOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now() }), "fixed");
+  await run(async () => markFixedOp({ store: pgStore(), part, note: String(form.get("note") ?? ""), now: await now(), eventStore }), "fixed");
 }
 
 export async function freelancerReply(partId: string, form: FormData) {
