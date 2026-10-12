@@ -18,6 +18,26 @@ const money = (v: string | number, c: string) => {
   }
 };
 
+// Reads the NDJSON reply: progress steps, then the finished turn (or an error).
+async function readTurn(stream: ReadableStream<Uint8Array>, onStep: (s: string) => void) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const msg = JSON.parse(buf.slice(0, nl));
+      buf = buf.slice(nl + 1);
+      if (msg.type === "step") onStep(msg.step);
+      else return msg;
+    }
+  }
+  return { error: "The answer was cut off. Try again." };
+}
+
 // The client's chat with their hosted payments assistant. The API history (Claude's own message
 // blocks) is kept as-is and sent back each turn; payments only happen through the Confirm buttons.
 export function Chat({ freelancer }: { freelancer: string }) {
@@ -25,6 +45,7 @@ export function Chat({ freelancer }: { freelancer: string }) {
   const [history, setHistory] = useState<unknown[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState("");
   const [pays, setPays] = useState<Record<string, PayState>>({});
   // Payments confirmed since the assistant last replied; sent with the next message so it knows.
   const [confirmed, setConfirmed] = useState<{ invoice_number: string; amount: string; currency: string; capture: string }[]>([]);
@@ -36,10 +57,11 @@ export function Chat({ freelancer }: { freelancer: string }) {
     setTurns((t) => [...t, { role: "user", text: q }]);
     setText("");
     setBusy(true);
+    setStep("");
     try {
       const res = await fetch("/connect/assistant/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: q, history, confirmed }) });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error);
+      const body = res.ok && res.body ? await readTurn(res.body, setStep) : await res.json();
+      if (!res.ok || body.error) throw new Error(body.error);
       setHistory(body.history);
       setConfirmed([]);
       setTurns((t) => [...t, { role: "assistant", text: body.reply, proposals: body.proposals ?? [] }]);
@@ -127,7 +149,11 @@ export function Chat({ freelancer }: { freelancer: string }) {
             </div>
           ),
         )}
-        {busy && <p className="text-sm text-muted">Checking…</p>}
+        {busy && (
+          <p role="status" className="text-sm text-muted">
+            {step || "Sending"}…
+          </p>
+        )}
         <div ref={end} />
       </div>
       <form

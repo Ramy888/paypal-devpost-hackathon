@@ -7,6 +7,7 @@ import { paypal, paypalOrders } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
 import { payerForKey } from "@/lib/connect.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
+import { schedulesOwed } from "@/lib/scheduleOps.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +33,15 @@ function buildServer(payer: Payer) {
     "what_do_i_owe",
     {
       title: "What do I owe",
-      description: "Lists the PayPal invoices your owner still owes through CollectPilot, most overdue first.",
+      description:
+        "Lists what your owner still owes through CollectPilot: open PayPal invoices (most overdue first) and milestone payment schedules, with each milestone's due date, status (including \"not done yet\" holds) and whether auto-pay is on. Pay invoices with pay_invoice.",
       annotations: { readOnlyHint: true },
     },
-    async () => text(await whatDoIOwe({ paypal: paypal(), payerEmail: payer.email, now: await now() })),
+    async () => {
+      const invoices = await whatDoIOwe({ paypal: paypal(), payerEmail: payer.email, now: await now() });
+      const schedules = await schedulesOwed({ store: pgStore(), payer });
+      return text({ spend_limit_per_payment: spendLimit, invoices, schedules });
+    },
   );
 
   server.registerTool(

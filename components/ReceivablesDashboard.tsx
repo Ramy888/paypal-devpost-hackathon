@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgStudio } from "ag-studio-react";
-import { studioTheme } from "ag-studio";
+import { studioTheme, createAiHarness, AgStudioModuleRegistry, AgStudioAiModule } from "ag-studio";
+import { claudeAdapter, pageHistory } from "@/components/studioAdapter";
 import { OwnerHeader } from "@/components/OwnerHeader";
 import type { AgReportState } from "ag-studio";
 import { applyEvent } from "@/lib/invoices.mjs";
@@ -82,8 +83,20 @@ const THEME = studioTheme.withParams({
   studioWidgetTitleFontFamily: "var(--font-bricolage), ui-sans-serif, system-ui, sans-serif",
   studioWidgetTitleTextColor: "#5d6a72",
 } as Parameters<typeof studioTheme.withParams>[0]);
-// The filters panel is for editing dashboards; this page is for reading one.
-const PANELS = { view: {} };
+// Only the "Ask AI" panel: AG Studio offers it in edit mode, so the page runs in edit mode with the
+// editing and data panels left out. Studio's own agents answer, on Claude (components/studioAdapter).
+const PANELS = { edit: { right: ["ai" as const] } };
+AgStudioModuleRegistry.registerModules([AgStudioAiModule]);
+const AI = ({ api }: { api: Parameters<typeof createAiHarness>[0] }) =>
+  createAiHarness(api, {
+    adapter: claudeAdapter,
+    history: pageHistory,
+    promptStarters: [
+      { label: "Which clients are at risk?", prompt: "Which clients are at risk of paying late, and how much do they owe? Answer from the invoices data." },
+      { label: "What's overdue?", prompt: "List the overdue invoices with client, amount and days overdue." },
+      { label: "Chart overdue by client", prompt: "Add a bar chart of the overdue amount by client to this page." },
+    ],
+  });
 
 // One stable array: Studio ignores field changes after the first render.
 // Amounts show with their currency sign (the receivables are in one currency, as in the tiles).
@@ -207,8 +220,8 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
 
   return (
     <div className="min-h-full bg-paper">
-      <OwnerHeader current="/" />
-      <main className="mx-auto grid max-w-3xl gap-5 px-5 pb-16">
+      <OwnerHeader current="/" wide />
+      <main className="mx-auto grid max-w-6xl gap-5 px-5 pb-16">
         <section className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pt-2">
           <div className="grid gap-2">
             <h1 className="font-display text-4xl font-semibold tracking-tight">Receivables</h1>
@@ -234,9 +247,10 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
               key={version}
               data={data}
               initialState={studioState}
-              mode="view"
+              mode="edit"
               theme={THEME}
               panels={PANELS}
+              ai={AI}
               onStateUpdated={(e) => (stateRef.current = e.state)}
             />
           </div>

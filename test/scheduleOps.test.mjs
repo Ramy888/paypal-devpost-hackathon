@@ -11,6 +11,7 @@ import {
   approveDateOp,
   releaseHoldOp,
   scheduleInvoiceBody,
+  schedulesOwed,
 } from "../lib/scheduleOps.mjs";
 import { createOrdersApi } from "../lib/paypalOrders.mjs";
 import { createEventStore } from "../lib/events.mjs";
@@ -409,4 +410,32 @@ test("a client can switch auto-pay off and on for one milestone", async () => {
   assert.equal(requests.length, 0);
   await setPartAutopayOp({ store, part: (await parts())[0], autopay: true });
   assert.deepEqual((await chargeDueParts({ store, paypal, orders, schedule, parts: await parts(), payer: PAYER, today: NOW })).map((r) => r.outcome), ["captured"]);
+});
+
+test("schedulesOwed lists the payer's schedules with each milestone's id, date, status and auto-pay", async () => {
+  const calls = [];
+  const store = {
+    async listSchedulesForPayer(q) {
+      calls.push(q);
+      return [{ id: "S1", title: "Brand film", currency: "USD", autopay: true }];
+    },
+    async listParts() {
+      return [
+        { id: "P1", name: "First cut", amount: 500, dueDate: "2026-11-01", status: "on_hold", autopay: true },
+        { id: "P2", name: "Final", amount: 700, dueDate: "2026-11-20", status: "scheduled", autopay: false },
+      ];
+    },
+  };
+  const out = await schedulesOwed({ store, payer: { id: "PAYER-1", email: "buyer@example.com" } });
+  assert.deepEqual(calls, [{ payerId: "PAYER-1", email: "buyer@example.com" }]);
+  assert.deepEqual(out, [
+    {
+      title: "Brand film",
+      auto_pay: true,
+      milestones: [
+        { part_id: "P1", name: "First cut", amount: 500, currency: "USD", due_date: "2026-11-01", status: "not done yet (on hold)", auto_pay: true },
+        { part_id: "P2", name: "Final", amount: 700, currency: "USD", due_date: "2026-11-20", status: "scheduled", auto_pay: false },
+      ],
+    },
+  ]);
 });

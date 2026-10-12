@@ -10,10 +10,11 @@ const LINKS = [
   { href: "/billing", label: "Plan" },
 ];
 
-// Header for the freelancer's own pages; the current page is shown, not linked.
-export function OwnerHeader({ current }: { current: string }) {
+// Header for the freelancer's own pages; the current page is shown, not linked. `wide` matches a
+// page that uses the wider layout (the dashboard with its AI panel).
+export function OwnerHeader({ current, wide = false }: { current: string; wide?: boolean }) {
   return (
-    <header className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-5 py-6">
+    <header className={`mx-auto flex ${wide ? "max-w-6xl" : "max-w-3xl"} flex-wrap items-center justify-between gap-3 px-5 py-6`}>
       <Link href="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
         <span aria-hidden className="grid h-7 w-7 place-items-center rounded-md bg-ink text-[12px] text-paper">
           CP

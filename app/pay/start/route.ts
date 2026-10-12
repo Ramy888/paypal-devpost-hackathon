@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       invoiceId: "",
       spendLimit,
       schedule: { id: schedule.id, title: schedule.title },
+      cancelUrl: `${back}?problem=cancelled`,
     });
     const res = NextResponse.redirect(approveUrl, 303);
     res.cookies.set(COOKIE.connect, nonce, cookieOptions(60 * 60));

@@ -158,3 +158,21 @@ test("payments the client confirmed since the last reply are told to Claude with
 test("the assistant is told to write plain text", () => {
   assert.match(assistantSystem({ freelancer: "R" }), /plain text/i);
 });
+
+test("progress steps are reported as the turn runs, so the chat can show them", async () => {
+  const claude = fakeClaude([
+    uses(toolUse("t1", "what_do_i_owe", {})),
+    uses(toolUse("t2", "propose_payment", { invoice_id: "INV-1", amount: null }), toolUse("t3", "hold_milestone", { part_id: "PART-1", note: "x" })),
+    reply("Done."),
+  ]);
+  const steps = [];
+  await assistantTurn({ anthropic: claude, model: "m", history: [], userText: "Pay and hold", ctx: ctx(), onStep: (s) => steps.push(s) });
+  assert.deepEqual(steps, [
+    "Reading your question",
+    "Looking up what you owe",
+    "Putting the answer together",
+    "Checking the payment",
+    "Holding the milestone",
+    "Putting the answer together",
+  ]);
+});

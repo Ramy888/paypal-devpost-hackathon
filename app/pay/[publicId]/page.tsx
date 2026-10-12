@@ -44,6 +44,7 @@ const DONE: Record<string, string> = {
 const PROBLEM: Record<string, string> = {
   paypal: "PayPal couldn't finish that just now. Nothing was charged. Please try again in a minute.",
   busy: "Too many tries in a short time. Please wait a few minutes and try again.",
+  cancelled: "You left PayPal before approving, so auto-pay is still off and nothing was charged.",
 };
 
 function StatusChip({ part }: { part: Part }) {

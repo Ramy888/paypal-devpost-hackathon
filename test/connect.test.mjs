@@ -68,6 +68,15 @@ test("start returns PayPal's approval link and stores only a hash of the browser
   assert.equal(pp.calls[0].body.payment_source.paypal.experience_context.return_url, "https://app.test/connect/return");
 });
 
+test("cancelling on PayPal returns to /connect/cancelled, or to the schedule when it is for auto-pay", async () => {
+  const pp = fakePayPal();
+  await start(pp, memoryStore());
+  assert.equal(pp.calls[0].body.payment_source.paypal.experience_context.cancel_url, "https://app.test/connect/cancelled");
+  const pp2 = fakePayPal();
+  await start(pp2, memoryStore(), { spendLimit: 300, schedule: { id: "S1", title: "Brand film" }, cancelUrl: "https://app.test/pay/abc?problem=cancelled" });
+  assert.equal(pp2.calls[0].body.payment_source.paypal.experience_context.cancel_url, "https://app.test/pay/abc?problem=cancelled");
+});
+
 test("start rejects a limit that was not offered", async () => {
   await assert.rejects(start(fakePayPal(), memoryStore(), { spendLimit: 99999 }), { code: "BAD_LIMIT" });
 });

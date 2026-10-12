@@ -35,27 +35,45 @@ export async function POST(req: Request) {
   const store = pgStore();
   // Using the hosted assistant counts as the client's assistant checking in (setup step 3).
   if (!payer.firstUsedAt) await store.markUsed(payer.id);
-  try {
-    const out = await assistantTurn({
-      anthropic,
-      model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
-      history,
-      userText: text,
-      confirmed,
-      ctx: { paypal: paypal(), store, payer, now: await now(), freelancer: process.env.FREELANCER_NAME ?? "your freelancer" },
-    });
-    return Response.json(out);
-  } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) return Response.json({ error: "The assistant is busy. Try again in a minute." }, { status: 503 });
-    if (err instanceof Anthropic.BadRequestError) {
-      console.error(JSON.stringify({ msg: "assistant bad request", error: err.message }));
-      return Response.json({ error: "Something went wrong in this chat. Start a new one." }, { status: 400 });
-    }
-    if (err instanceof Anthropic.APIError) {
-      console.error(JSON.stringify({ msg: "assistant api error", status: err.status }));
-      return Response.json({ error: "The assistant is unavailable right now. Try again in a minute." }, { status: 502 });
-    }
-    console.error(JSON.stringify({ msg: "assistant failed", error: String(err) }));
-    return Response.json({ error: "PayPal or CollectPilot didn't answer. Try again in a minute." }, { status: 502 });
+  const ctx = { paypal: paypal(), store, payer, now: await now(), freelancer: process.env.FREELANCER_NAME ?? "your freelancer" };
+
+  // One JSON object per line: {"step"} while it works, then {"done"} or {"error"}. The chat shows
+  // each step, since a turn takes two or more Claude calls.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      try {
+        const out = await assistantTurn({
+          anthropic,
+          model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+          history,
+          userText: text,
+          confirmed,
+          ctx,
+          onStep: (step: string) => send({ type: "step", step }),
+        });
+        send({ type: "done", ...out });
+      } catch (err) {
+        send({ type: "error", error: failure(err) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+}
+
+function failure(err: unknown): string {
+  if (err instanceof Anthropic.RateLimitError) return "The assistant is busy. Try again in a minute.";
+  if (err instanceof Anthropic.BadRequestError) {
+    console.error(JSON.stringify({ msg: "assistant bad request", error: err.message }));
+    return "Something went wrong in this chat. Start a new one.";
   }
+  if (err instanceof Anthropic.APIError) {
+    console.error(JSON.stringify({ msg: "assistant api error", status: err.status }));
+    return "The assistant is unavailable right now. Try again in a minute.";
+  }
+  console.error(JSON.stringify({ msg: "assistant failed", error: String(err) }));
+  return "PayPal or CollectPilot didn't answer. Try again in a minute.";
 }
