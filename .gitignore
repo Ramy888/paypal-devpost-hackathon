@@ -23,3 +23,13 @@ next-env.d.ts
 # Private planning/assessment notes (repo goes public)
 Claude_Code_AI_Invoice_Review_Assessment.md
 docs/ai-invoice-review-assessment.md
+
+# AI agent instructions and tooling (kept local, never pushed)
+CLAUDE.md
+AGENTS.md
+.claude/
+.agents/
+agent/
+.cursor/
+skills-lock.json
+.mcp.json
