@@ -165,7 +165,7 @@ export default async function RemindersPage({ searchParams }: PageProps<"/remind
           )}
         </section>
 
-        <Tabs tabs={tabs} active={active} basePath="/reminders" label="Reminders" />
+        <Tabs tabs={tabs} active={active} basePath="/reminders" label="Reminders" center />
         <section className="grid gap-4" aria-label={tabs.find((t) => t.id === active)!.label}>
           {shown.length === 0 ? (
             <p className="rounded-xl border border-dashed border-line p-6 text-sm text-muted">{EMPTY[active]}</p>

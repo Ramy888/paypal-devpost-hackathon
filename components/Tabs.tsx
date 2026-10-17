@@ -25,9 +25,9 @@ function Icon({ name }: { name: TabIcon }) {
   );
 }
 
-export function Tabs({ tabs, active, basePath, label }: { tabs: Tab[]; active: string; basePath: string; label: string }) {
+export function Tabs({ tabs, active, basePath, label, center = false }: { tabs: Tab[]; active: string; basePath: string; label: string; center?: boolean }) {
   return (
-    <nav aria-label={label} className="flex flex-wrap gap-1 rounded-xl border border-line bg-card p-1">
+    <nav aria-label={label} className={`flex flex-wrap gap-1 rounded-xl border border-line bg-card p-1 ${center ? "justify-center" : ""}`}>
       {tabs.map((t) => {
         const on = t.id === active;
         return (
