@@ -102,7 +102,7 @@ export default async function DigestPage({ searchParams }: PageProps<"/digest">)
   return (
     <div className="min-h-full bg-paper">
       <OwnerHeader current="/digest" />
-      <main className="mx-auto grid max-w-3xl gap-6 px-5 pb-16">
+      <main className="mx-auto grid w-full max-w-3xl gap-6 px-4 pb-16 sm:px-5">
         <section className="grid gap-2 pt-2">
           <p className="text-sm text-muted">
             {day(d.from)} to {day(d.to)}

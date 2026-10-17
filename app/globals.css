@@ -10,6 +10,7 @@
   --line: #e1e0d9;
   --cleared: #0d6b57;
   --cleared-soft: #e2f0ea;
+  --landed: #2fbf8f; /* the logo's dot */
   --pending: #a3570b;
   --pending-soft: #f8ecdc;
   color-scheme: light;
@@ -23,6 +24,7 @@
   --color-line: var(--line);
   --color-cleared: var(--cleared);
   --color-cleared-soft: var(--cleared-soft);
+  --color-landed: var(--landed);
   --color-pending: var(--pending);
   --color-pending-soft: var(--pending-soft);
   --font-sans: var(--font-geist-sans);
@@ -34,6 +36,22 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Shared building blocks. */
+@utility card {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgb(18 32 43 / 0.04), 0 10px 28px -18px rgb(18 32 43 / 0.22);
+}
+
+/* A grid item never grows past its column because of one long word (a sandbox email, a URL):
+   it wraps or truncates instead of pushing the page sideways on a phone. */
+@layer base {
+  .grid > * {
+    min-width: 0;
+  }
 }
 
 :focus-visible {

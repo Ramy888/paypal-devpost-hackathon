@@ -5,13 +5,14 @@ import { AgStudio } from "ag-studio-react";
 import { studioTheme, createAiHarness, AgStudioModuleRegistry, AgStudioAiModule } from "ag-studio";
 import { claudeAdapter, pageHistory } from "@/components/studioAdapter";
 import { OwnerHeader } from "@/components/OwnerHeader";
-import type { AgReportState } from "ag-studio";
-import { applyEvent, SCHEDULE_EVENT } from "@/lib/invoices.mjs";
+import type { AgDefaultRegistry, AgReportState, AgWidgetsConfig } from "ag-studio";
+import { applyEvent, byAttention, SCHEDULE_EVENT } from "@/lib/invoices.mjs";
 
 export type InvoiceRow = {
   id: string;
   invoice_number: string;
   client: string;
+  client_name: string;
   amount: number;
   amount_due: number;
   currency: string;
@@ -49,12 +50,12 @@ const bannerText = (ev: LiveEvent, lagMs: number) =>
 
 const FIELDS = [
   { id: "invoice_number", name: "Invoice", format: "textFormat" },
-  { id: "client", name: "Client", format: "textFormat" },
+  { id: "client_name", name: "Client", format: "textFormat" },
   { id: "amount", name: "Amount", format: "currencyFormat" },
   { id: "status_label", name: "Status", format: "textFormat" },
-  { id: "due_date", name: "Due", format: "textFormat" },
-  { id: "risk", name: "Risk", format: "textFormat" },
-  { id: "expected_pay_date", name: "Expected", format: "textFormat" },
+  { id: "due_label", name: "Due", format: "textFormat" },
+  { id: "risk_label", name: "Risk", format: "textFormat" },
+  { id: "expected_label", name: "Expected", format: "textFormat" },
 ] as const;
 
 // The cash panel: four tiles, each the sum of one per-row amount.
@@ -67,11 +68,46 @@ const PANEL = [
 
 // PayPal's status codes, as people say them.
 const STATUS_LABEL: Record<string, string> = { SENT: "Sent", UNPAID: "Unpaid", PARTIALLY_PAID: "Part paid", PAID: "Paid", MARKED_AS_PAID: "Paid", DRAFT: "Draft", SCHEDULED: "Scheduled", CANCELLED: "Cancelled", REFUNDED: "Refunded", PARTIALLY_REFUNDED: "Part refunded", PAYMENT_PENDING: "Pending" };
-const statusLabel = (r: InvoiceRow) => (r.held ? "On hold" : STATUS_LABEL[r.status] ?? r.status);
+const statusLabel = (r: InvoiceRow) => (r.held ? "On hold" : !r.paid && r.days_overdue > 0 && r.risk ? "Overdue" : STATUS_LABEL[r.status] ?? r.status);
+
+// Grid cells people read: "Oct 26" instead of 2026-10-26, "High" instead of high.
+const shortDate = (iso: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+const capital = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+const withLabels = (r: InvoiceRow) => ({
+  ...r,
+  status_label: statusLabel(r),
+  due_label: shortDate(r.due_date),
+  risk_label: capital(r.risk),
+  expected_label: shortDate(r.expected_pay_date),
+});
+
+// Status as a small coloured pill in the app's colours: green paid, amber owed, red overdue or on hold.
+const PILL: Record<string, [string, string]> = { paid: ["#e2f0ea", "#0d6b57"], owed: ["#f8ecdc", "#a3570b"], late: ["#fbe4e1", "#b42318"], closed: ["#ecebe6", "#5d6a72"] };
+const pillTone = (label: string) =>
+  label === "Paid" ? "paid" : ["Cancelled", "Refunded", "Part refunded", "Draft"].includes(label) ? "closed" : ["On hold", "Overdue"].includes(label) ? "late" : "owed";
+// A React cell renderer: AG Studio's grid renders cells with React.
+function StatusPill({ value }: { value?: unknown }) {
+  const label = String(value ?? "");
+  if (!label) return null;
+  const [bg, fg] = PILL[pillTone(label)];
+  return <span style={{ display: "inline-block", padding: "0 9px", borderRadius: 999, background: bg, color: fg, fontSize: 12, fontWeight: 600, lineHeight: "20px" }}>{label}</span>;
+}
+const isStatusField = (f: { key?: string; fieldId?: unknown }) => String(f.key ?? "").endsWith("status_label") || JSON.stringify(f.fieldId ?? "").includes("status_label");
+const WIDGETS = (cfg: AgWidgetsConfig<AgDefaultRegistry>): AgWidgetsConfig<AgDefaultRegistry> => ({
+  ...cfg,
+  widgets: cfg.widgets.map((w) =>
+    w.id === "grid" ? ({ ...w, options: { ...(w.options as object | undefined), createCellRenderer: (field: { key?: string; fieldId?: unknown }) => (isStatusField(field) ? StatusPill : undefined) } } as typeof w) : w,
+  ),
+});
 
 // Days overdue stays a data field (the phone list uses it) but not a grid column: Status and Risk say it.
 // Schedule labels show in the phone list and on /schedules; the grid has no room for them.
+// The raw values behind the friendly columns stay as data for the AI panel.
 const HIDDEN = [
+  { id: "client", name: "Client email", format: "textFormat" },
+  { id: "due_date", name: "Due date", format: "textFormat" },
+  { id: "risk", name: "Risk bucket", format: "textFormat" },
+  { id: "expected_pay_date", name: "Expected pay date", format: "textFormat" },
   { id: "days_overdue", name: "Days overdue", format: "integerFormat" },
   { id: "project", name: "Schedule", format: "textFormat" },
 ] as const;
@@ -95,8 +131,11 @@ const THEME = studioTheme.withParams({
   studioWidgetBorder: "1px solid #e1e0d9",
   studioWidgetBorderRadius: 12,
   studioWidgetBackgroundColor: "#ffffff",
-  studioWidgetTitleFontFamily: "var(--font-bricolage), ui-sans-serif, system-ui, sans-serif",
+  studioWidgetTitleFontFamily: "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+  studioWidgetTitleFontSize: 13,
+  studioWidgetTitleFontWeight: 500,
   studioWidgetTitleTextColor: "#5d6a72",
+  studioValueWidgetFontSize: 30,
 } as Parameters<typeof studioTheme.withParams>[0]);
 // Only the "Ask AI" panel: AG Studio offers it in edit mode, so the page runs in edit mode with the
 // editing and data panels left out. Studio's own agents answer, on Claude (components/studioAdapter).
@@ -139,7 +178,7 @@ const INITIAL_STATE: AgReportState = {
         invoices: {
           type: "grid",
           dataMapping: { cols: FIELDS.map((f) => ({ id: `invoices.${f.id}` })) },
-          format: { title: { enabled: true, text: "Invoices" }, style: { columnAutoSize: false, columnWidth: 100 } },
+          format: { title: { enabled: true, text: "Invoices" }, style: { columnAutoSize: true } },
         },
       },
       widgetLayout: {
@@ -182,15 +221,15 @@ function PhoneList({ rows }: { rows: InvoiceRow[] }) {
     <ul className="divide-y divide-zinc-200">
       {rows.map((r) => (
         <li key={r.id} className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 px-4 py-3 text-sm">
-          <span className="truncate font-medium">{r.client}</span>
+          <span className="truncate font-medium">{r.client_name || r.client}</span>
           <span className="text-right font-semibold tabular-nums">{money(r.amount, r.currency)}</span>
           <span className="truncate font-mono text-xs text-zinc-500">
             {r.project ? `${r.project} · ` : ""}
-            {r.invoice_number} · due {r.due_date}
-            {r.expected_pay_date && ` · expect ${r.expected_pay_date}`}
+            {r.invoice_number} · due {shortDate(r.due_date)}
+            {r.expected_pay_date && ` · expect ${shortDate(r.expected_pay_date)}`}
           </span>
           <span className={`text-right text-xs font-semibold ${r.paid ? "text-emerald-700" : r.days_overdue > 0 ? "text-amber-700" : "text-zinc-500"}`}>
-            {r.paid ? "Paid" : r.held ? "On hold" : r.days_overdue > 0 ? `${r.days_overdue}d overdue` : r.status.toLowerCase()}
+            {r.paid ? "Paid" : r.held ? "On hold" : r.days_overdue > 0 ? `${r.days_overdue}d overdue` : statusLabel(r)}
           </span>
         </li>
       ))}
@@ -229,14 +268,14 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
   // remount Studio on each change, carrying the user's dashboard state across. The remount
   // visibly blanks the grid ("Loading…") for a moment; see the plan's spike 2 notes.
   const data = useMemo(
-    () => ({ sources: [{ id: "invoices", name: "Invoices", data: rows.map((r) => ({ ...r, status_label: statusLabel(r) })), fields: SOURCE_FIELDS }] }),
+    () => ({ sources: [{ id: "invoices", name: "Invoices", data: byAttention(rows).map(withLabels), fields: SOURCE_FIELDS }] }),
     [rows],
   );
 
   return (
     <div className="min-h-full bg-paper">
-      <OwnerHeader current="/" wide />
-      <main className="mx-auto grid max-w-6xl gap-5 px-5 pb-16">
+      <OwnerHeader current="/" />
+      <main className="mx-auto grid w-full max-w-6xl gap-5 px-4 pb-16 sm:px-5">
         <section className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pt-2">
           <div className="grid gap-2">
             <h1 className="font-display text-4xl font-semibold tracking-tight">Receivables</h1>
@@ -257,7 +296,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
         )}
         {narrow ? (
           <div className="overflow-hidden rounded-xl border border-line bg-card">
-            <PhoneList rows={rows} />
+            <PhoneList rows={byAttention(rows)} />
           </div>
         ) : (
           <div className="h-[calc(100dvh-13rem)] min-h-[34rem]">
@@ -267,6 +306,7 @@ export default function ReceivablesDashboard({ initialRows, nowIso }: { initialR
               initialState={studioState}
               mode="edit"
               theme={THEME}
+              widgets={WIDGETS}
               panels={PANELS}
               ai={AI}
               onStateUpdated={(e) => (stateRef.current = e.state)}

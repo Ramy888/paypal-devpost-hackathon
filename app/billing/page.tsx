@@ -37,7 +37,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   return (
     <div className="min-h-full bg-paper">
       <OwnerHeader current="/billing" />
-      <main className="mx-auto grid max-w-3xl gap-8 px-5 pb-16">
+      <main className="mx-auto grid w-full max-w-3xl gap-8 px-4 pb-16 sm:px-5">
         <section className="grid gap-2 pt-2">
           <h1 className="font-display text-4xl font-semibold tracking-tight">Your plan</h1>
           <p className="text-muted">CollectPilot bills its own plan with PayPal Subscriptions, the same way your retainers are billed.</p>

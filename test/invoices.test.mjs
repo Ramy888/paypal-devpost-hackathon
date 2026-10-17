@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toRow, applyEvent, daysOverdue, expectedPayDate } from "../lib/invoices.mjs";
+import { toRow, applyEvent, daysOverdue, expectedPayDate, byAttention } from "../lib/invoices.mjs";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
 const INVOICE = {
@@ -121,4 +121,31 @@ test("a schedule hold event marks the row held and back, without touching its st
   const cleared = applyEvent(held, { event_type: "APP.SCHEDULE.UPDATED", invoice_id: "INV2-AAAA", held: false }, NOW);
   assert.equal(cleared[0].held, false);
   assert.equal(applyEvent(rows, { event_type: "APP.SCHEDULE.UPDATED", invoice_id: "INV2-NEW", held: true }, NOW), rows);
+});
+
+test("client column shows a name: PayPal's recipient name, else the business, else the email's local part", () => {
+  const withName = { ...INVOICE, primary_recipients: [{ billing_info: { email_address: "j@x.com", name: { given_name: "Jordan", surname: "Lee" } } }] };
+  assert.equal(toRow(withName, NOW).client_name, "Jordan Lee");
+  const business = { ...INVOICE, primary_recipients: [{ billing_info: { email_address: "ap@acme.com", business_name: "Acme Studio" } }] };
+  assert.equal(toRow(business, NOW).client_name, "Acme Studio");
+  const bare = { ...INVOICE, primary_recipients: [{ billing_info: { email_address: "billing.team@acme.com" } }] };
+  assert.equal(toRow(bare, NOW).client_name, "billing.team");
+  assert.equal(toRow(bare, NOW).client, "billing.team@acme.com", "the email stays for the AI and the phone list");
+  const sandbox = { ...INVOICE, primary_recipients: [{ billing_info: { email_address: "sb-mon6753195394@personal.example.com" } }] };
+  assert.equal(toRow(sandbox, NOW).client_name, "Sandbox buyer");
+});
+
+test("attention order: held, then most overdue, then by due date; paid and cancelled last", () => {
+  const row = (id, status, due, extra = {}) => toRow({ ...INVOICE, id, status, detail: { ...INVOICE.detail, invoice_number: id, payment_term: { due_date: due } } }, NOW, extra.held ? { held: true, project: "", dueDate: due } : null);
+  const rows = [
+    row("paid-new", "PAID", "2026-10-20"),
+    row("due-later", "SENT", "2026-11-30"),
+    row("cancelled", "CANCELLED", "2026-10-01"),
+    row("overdue-3", "SENT", "2026-10-18"),
+    row("due-soon", "SENT", "2026-10-25"),
+    row("overdue-20", "SENT", "2026-10-01"),
+    row("held", "SENT", "2026-10-10", { held: true }),
+  ];
+  assert.deepEqual(byAttention(rows).map((r) => r.id), ["held", "overdue-20", "overdue-3", "due-soon", "due-later", "paid-new", "cancelled"]);
+  assert.equal(rows[0].id, "paid-new", "input is not mutated");
 });
