@@ -24,7 +24,9 @@ try {
     console.log("Dry run. Pass --apply to write.");
   } else {
     const store = pgStore(db);
-    await store.setSetting(HIDDEN_KEY, JSON.stringify(hidden.map((inv) => inv.id)));
+    // Keep ids hidden earlier by hand (e.g. leftover demo takes) as well as the matches.
+    const earlier = JSON.parse((await store.getSetting(HIDDEN_KEY)) ?? "[]");
+    await store.setSetting(HIDDEN_KEY, JSON.stringify([...new Set([...earlier, ...hidden.map((inv) => inv.id)])]));
     await db.query("UPDATE payers SET payments_count = 0, paid_total = 0 WHERE payments_count > 0 OR paid_total > 0");
     await store.setSetting("clock_offset_days", 0);
     console.log("Applied.");

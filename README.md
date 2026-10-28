@@ -14,7 +14,7 @@ Live demo (PayPal sandbox): https://collectpilot-webhooks.onrender.com. Judges' 
 
 1. Sign in at `/login` with the freelancer passcode.
 2. **Receivables** (`/`): the live AG Studio dashboard. Ask the AI Assistant "Which clients are at risk?".
-3. **New invoice**: type or speak the job; Claude drafts the PayPal invoice and checks it before it's sent.
+3. **New invoice**: type or speak the job, including the client's email (use the sandbox buyer's, so their agent can pay it); Claude drafts the PayPal invoice and checks it before it's sent.
 4. **Connect a client agent**: open `/connect`, set a limit, approve with the sandbox buyer, and add the MCP snippet to an MCP-capable assistant (for example Claude). Ask it "What do I owe through CollectPilot? Pay anything overdue." The dashboard updates live from PayPal's webhook.
 5. **Schedules**, **Retainers** and **Digest**: milestones with "Not done yet" holds, monthly PayPal Subscriptions, and what the agent collected.
 
