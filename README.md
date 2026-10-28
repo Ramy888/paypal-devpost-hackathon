@@ -2,7 +2,32 @@
 
 **CollectPilot**: an AI receivables agent that gets freelancers paid through PayPal. Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/).
 
-Work in progress. Current stage: sandbox spikes.
+CollectPilot is one freelancer's own collections assistant, connected to their own PayPal account. Clients pay the freelancer directly through PayPal; CollectPilot never holds the money. It turns a voice note into a PayPal invoice, keeps a live receivables dashboard, chases politely, and lets a client's own AI agent pay its invoices over MCP within a limit the client sets.
+
+Live demo (PayPal sandbox): https://collectpilot-webhooks.onrender.com. Judges' sign-in details are in the Devpost testing instructions.
+
+**Built with:** PayPal Invoicing v2, Subscriptions, Vault and Orders v2 (through the PayPal Server SDK), PayPal webhooks · Claude (Anthropic) · AG Studio (AG Grid) with its AI module · APIMatic Context Plugin for PayPal · MCP · Next.js, React, TypeScript, Postgres, Render.
+
+**Roadmap:** many freelancers, each with their own PayPal, through PayPal partner onboarding. The demo uses a US sandbox seller, since an Egypt sandbox account can't receive payments.
+
+## Try it (sandbox)
+
+1. Sign in at `/login` with the freelancer passcode.
+2. **Receivables** (`/`): the live AG Studio dashboard. Ask the AI Assistant "Which clients are at risk?".
+3. **New invoice**: type or speak the job; Claude drafts the PayPal invoice and checks it before it's sent.
+4. **Connect a client agent**: open `/connect`, set a limit, approve with the sandbox buyer, and add the MCP snippet to an MCP-capable assistant (for example Claude). Ask it "What do I owe through CollectPilot? Pay anything overdue." The dashboard updates live from PayPal's webhook.
+5. **Schedules**, **Retainers** and **Digest**: milestones with "Not done yet" holds, monthly PayPal Subscriptions, and what the agent collected.
+
+## Run it yourself
+
+You need a PayPal sandbox REST app (with Invoicing and Vault enabled), a sandbox personal (buyer) account, an Anthropic API key and Postgres.
+
+```sh
+npm install
+cp .env.example .env   # fill in PayPal sandbox, Anthropic, DATABASE_URL, SESSION_SECRET, FREELANCER_PASSCODE
+npm run dev            # http://localhost:3000; webhooks need a public URL (WEBHOOK_URL)
+node --env-file=.env scripts/demo-reset.mjs   # dry run; --apply hides test invoices and zeroes counters
+```
 
 ## Spike 1: PayPal money path (Postman / Newman)
 
@@ -39,7 +64,7 @@ npm run dev     # http://localhost:3000
 npm test        # unit tests (node:test)
 ```
 
-AG Studio shows a watermark until a licence key is configured.
+AG Studio shows a watermark until `NEXT_PUBLIC_AG_STUDIO_LICENSE` holds a licence key (it is inlined into the client bundle at build time).
 
 ### Payment schedules and auto-pay
 

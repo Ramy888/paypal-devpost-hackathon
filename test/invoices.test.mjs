@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toRow, applyEvent, daysOverdue, expectedPayDate, byAttention } from "../lib/invoices.mjs";
+import { toRow, applyEvent, daysOverdue, expectedPayDate, byAttention, isTestInvoice, withoutHidden } from "../lib/invoices.mjs";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
 const INVOICE = {
@@ -148,4 +148,19 @@ test("attention order: held, then most overdue, then by due date; paid and cance
   ];
   assert.deepEqual(byAttention(rows).map((r) => r.id), ["held", "overdue-20", "overdue-3", "due-soon", "due-later", "paid-new", "cancelled"]);
   assert.equal(rows[0].id, "paid-new", "input is not mutated");
+});
+
+test("test invoices are recognised by number prefix or the sandbox buyer's name", () => {
+  assert.equal(isTestInvoice({ detail: { invoice_number: "CP-SDK-1791642401123" } }), true);
+  assert.equal(isTestInvoice({ detail: { invoice_number: "CP-ab12" }, primary_recipients: [{ billing_info: { name: { full_name: "Sandbox buyer" } } }] }), true);
+  assert.equal(isTestInvoice({ detail: { invoice_number: "CP-ab13" }, primary_recipients: [{ billing_info: { business_name: "Sandbox buyer" } }] }), true);
+  assert.equal(isTestInvoice({ detail: { invoice_number: "CP-DEMO-1791220834717" } }), false);
+  assert.equal(isTestInvoice({ detail: { invoice_number: "RVS-261010-8A23" } }), false);
+});
+
+test("hidden invoices are left out, and a malformed setting hides nothing", () => {
+  const items = [{ id: "A" }, { id: "B" }];
+  assert.deepEqual(withoutHidden(items, '["B"]'), [{ id: "A" }]);
+  assert.deepEqual(withoutHidden(items, null), items);
+  assert.deepEqual(withoutHidden(items, "not json"), items);
 });

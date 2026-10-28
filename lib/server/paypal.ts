@@ -1,5 +1,7 @@
 import { createPayPalClient } from "@/lib/paypal.mjs";
 import { createOrdersApi } from "@/lib/paypalOrders.mjs";
+import { pgStore } from "@/lib/server/db.mjs";
+import { HIDDEN_KEY, withoutHidden } from "@/lib/invoices.mjs";
 
 type PayPalClient = ReturnType<typeof createPayPalClient>;
 const g = globalThis as typeof globalThis & { __collectpilotPayPal?: PayPalClient };
@@ -21,4 +23,13 @@ const go = globalThis as typeof globalThis & { __collectpilotOrders?: OrdersApi 
 export function paypalOrders(): OrdersApi {
   go.__collectpilotOrders ??= createOrdersApi({ apiBase: process.env.PAYPAL_API_BASE ?? "", auth: paypal() });
   return go.__collectpilotOrders;
+}
+
+// PayPal's invoice list without the test invoices the demo reset hid.
+export async function listInvoices(query = "page_size=100&total_required=true") {
+  const [list, hidden] = await Promise.all([
+    paypal().request("GET", `/v2/invoicing/invoices?${query}`),
+    process.env.DATABASE_URL ? pgStore().getSetting(HIDDEN_KEY) : null,
+  ]);
+  return { ...list, items: withoutHidden(list.items ?? [], hidden) };
 }

@@ -6,7 +6,7 @@ import { Tabs, pickTab, type Tab } from "@/components/Tabs";
 import { buildDigest } from "@/lib/digest.mjs";
 import { PRO } from "@/lib/proPlan.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
-import { paypal } from "@/lib/server/paypal";
+import { listInvoices, paypal } from "@/lib/server/paypal";
 import { recentWindow } from "@/lib/server/clock.mjs";
 import { isOwner } from "@/lib/server/owner";
 
@@ -22,7 +22,7 @@ const day = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US"
 // The list endpoint has no payment transactions, so fetch details for invoices that received
 // money, a few at a time. Failures are counted so the page can say the totals may be low.
 async function invoicesWithPayments() {
-  const list = await paypal().request("GET", "/v2/invoicing/invoices?page_size=100&total_required=true");
+  const list = await listInvoices();
   const items: { id: string; payments?: { paid_amount?: { value: string } } }[] = list.items ?? [];
   const out: { id: string }[] = [];
   let failed = 0;

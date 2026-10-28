@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import DashboardLoader from "@/components/DashboardLoader";
 import type { InvoiceRow } from "@/components/ReceivablesDashboard";
 import { toRow } from "@/lib/invoices.mjs";
-import { paypal } from "@/lib/server/paypal";
+import { listInvoices } from "@/lib/server/paypal";
 import { now } from "@/lib/server/clock.mjs";
 import { redirect } from "next/navigation";
 import { isOwner } from "@/lib/server/owner";
@@ -30,7 +30,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   await connection();
   if (!(await isOwner())) redirect("/login");
   const { synthetic } = await searchParams;
-  const list = await paypal().request("GET", "/v2/invoicing/invoices?page_size=100&total_required=true");
+  const list = await listInvoices();
   const today = await now();
   const overrides = await loadOverrides();
   const real: InvoiceRow[] = (list.items ?? []).map((inv: { id: string }) => toRow(inv, today, overrides.get(inv.id) ?? null));

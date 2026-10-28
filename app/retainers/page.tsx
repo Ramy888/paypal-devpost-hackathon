@@ -6,7 +6,7 @@ import { OwnerHeader } from "@/components/OwnerHeader";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { findRetainerCandidates } from "@/lib/retainers.mjs";
 import { pgStore } from "@/lib/server/db.mjs";
-import { paypal } from "@/lib/server/paypal";
+import { listInvoices } from "@/lib/server/paypal";
 import { isOwner } from "@/lib/server/owner";
 import { ownerIsPro } from "@/lib/server/pro";
 import Link from "next/link";
@@ -65,7 +65,7 @@ export default async function RetainersPage({ searchParams }: PageProps<"/retain
   const store = pgStore();
   const [retainers, list, pro]: [Retainer[], { items?: unknown[] }, boolean] = await Promise.all([
     store.listRetainers(),
-    paypal().request("GET", "/v2/invoicing/invoices?page_size=100"),
+    listInvoices("page_size=100"),
     ownerIsPro(),
   ]);
   const candidates: Candidate[] = findRetainerCandidates({ invoices: list.items ?? [], existing: retainers });

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgStudio } from "ag-studio-react";
-import { studioTheme, createAiHarness, AgStudioModuleRegistry, AgStudioAiModule } from "ag-studio";
+import { studioTheme, createAiHarness, AgStudioModuleRegistry, AgStudioAiModule, AgStudioLicenseManager } from "ag-studio";
 import { claudeAdapter, pageHistory } from "@/components/studioAdapter";
 import { OwnerHeader } from "@/components/OwnerHeader";
 import type { AgDefaultRegistry, AgReportState, AgWidgetsConfig } from "ag-studio";
@@ -141,6 +141,8 @@ const THEME = studioTheme.withParams({
 // editing and data panels left out. Studio's own agents answer, on Claude (components/studioAdapter).
 const PANELS = { edit: { right: ["ai" as const] } };
 AgStudioModuleRegistry.registerModules([AgStudioAiModule]);
+// Trial key (Pro with AI); without it Studio shows a watermark. Client-side by design, so NEXT_PUBLIC_.
+if (process.env.NEXT_PUBLIC_AG_STUDIO_LICENSE) AgStudioLicenseManager.setLicenseKey(process.env.NEXT_PUBLIC_AG_STUDIO_LICENSE);
 const AI = ({ api }: { api: Parameters<typeof createAiHarness>[0] }) =>
   createAiHarness(api, {
     adapter: claudeAdapter,
