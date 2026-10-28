@@ -4,7 +4,7 @@
 
 CollectPilot is one freelancer's own collections assistant, connected to their own PayPal account. Clients pay the freelancer directly through PayPal; CollectPilot never holds the money. It turns a voice note into a PayPal invoice, keeps a live receivables dashboard, chases politely, and lets a client's own AI agent pay its invoices over MCP within a limit the client sets.
 
-Live demo (PayPal sandbox): https://collectpilot-webhooks.onrender.com. Judges' sign-in details are in the Devpost testing instructions.
+Live demo (PayPal sandbox): https://collectpilot-webhooks.onrender.com. Judges' sign-in details are in the Devpost testing instructions. Demo video: https://youtu.be/CRf65zAV12Q
 
 **Built with:** PayPal Invoicing v2, Subscriptions, Vault and Orders v2 (through the PayPal Server SDK), PayPal webhooks · Claude (Anthropic) · AG Studio (AG Grid) with its AI module · APIMatic Context Plugin for PayPal · MCP · Next.js, React, TypeScript, Postgres, Render.
 

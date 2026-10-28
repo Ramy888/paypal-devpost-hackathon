@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Title and end card for the demo video. Local file, system fonts, no external requests. ?end=1 shows the end card. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>CollectPilot card</title>
+    <style>
+      :root { --paper: #f4f3ef; --card: #fff; --ink: #12202b; --muted: #5d6a72; --line: #e1e0d9; --cleared: #0d6b57; --landed: #2fbf8f; --pending: #a3570b; }
+      html, body { margin: 0; width: 100vw; height: 100vh; background: var(--paper); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+      .wrap { position: absolute; inset: 0; display: grid; grid-template-columns: 1.15fr 1fr; align-items: center; gap: 6vw; padding: 0 8vw; }
+      h1 { font-size: 11vh; line-height: 1; margin: 3vh 0 2.4vh; letter-spacing: -0.3vh; }
+      h1 span { color: var(--cleared); }
+      p { font-size: 3.3vh; line-height: 1.35; color: var(--muted); margin: 0; }
+      .stack { margin-top: 3vh; font-size: 2.2vh; }
+      .url { margin-top: 2vh; font-size: 2.7vh; color: var(--cleared); font-weight: 600; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 2.6vh; padding: 3.6vh; box-shadow: 0 2vh 6vh -3vh rgba(18, 32, 43, 0.35); }
+      .row { display: flex; align-items: center; gap: 1.6vh; font-size: 2.6vh; margin: 1.8vh 0; }
+      .n { width: 4.2vh; height: 4.2vh; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--ink); color: #fff; font-weight: 700; font-size: 2vh; }
+      .row small { display: block; color: var(--muted); font-size: 2vh; }
+      .end .only-title, .title .only-end { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div>
+        <svg viewBox="0 0 32 32" width="96" height="96" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#12202b" /><path d="M21.5 10.2A8 8 0 1 0 21.5 21.8" fill="none" stroke="#f4f3ef" stroke-width="3.6" stroke-linecap="round" /><circle cx="22.6" cy="16" r="2.9" fill="#2fbf8f" /></svg>
+        <h1>Collect<span>Pilot</span></h1>
+        <p>An AI receivables agent that gets freelancers paid through PayPal.</p>
+        <p class="stack">PayPal Invoicing · Vault · Orders (Server SDK) · Subscriptions · Webhooks · Claude · AG Studio · MCP</p>
+        <p class="url only-end">collectpilot-webhooks.onrender.com</p>
+      </div>
+      <div class="card">
+        <div class="row"><span class="n">1</span><div>Voice note to PayPal invoice<small>AI drafts it and checks it against the quote</small></div></div>
+        <div class="row"><span class="n">2</span><div>A live receivables dashboard<small>risk, expected pay date, an AI assistant</small></div></div>
+        <div class="row"><span class="n">3</span><div>Invoices an AI agent can pay<small>over MCP, within the client's own limit</small></div></div>
+      </div>
+    </div>
+    <script>document.body.className = location.search.includes("end=1") ? "end" : "title";</script>
+  </body>
+</html>
